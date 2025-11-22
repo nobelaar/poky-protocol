@@ -59,6 +59,7 @@ Use the provided scripts to deploy the MVP contracts to any configured network:
 ```bash
 npx hardhat run scripts/deploy-module-registry.ts --network <networkName>
 npx hardhat run scripts/deploy-track-registry.ts --network <networkName>
+npx hardhat run scripts/deploy-mock-verifier.ts --network <networkName>
 ```
 
 The scripts log the deployer account, target block, and initial totals so you can verify deployments quickly.
