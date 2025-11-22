@@ -1,0 +1,34 @@
+{
+  "title": "Conceptos básicos de tokens (ejemplo)",
+  "moduleIds": [],
+  "newModules": [
+    {
+      "title": "Bienvenida y setup de billetera",
+      "description": "Resumen de qué es un token, por qué existen, enlaces a glosario y una guía rápida para instalar/configurar una billetera antes de practicar.",
+      "image": "ipfs://placeholder/wallet-intro.png",
+      "ipfsCid": "bafy-token-welcome",
+      "sectionCount": 3
+    },
+    {
+      "title": "Fungibles vs no fungibles",
+      "description": "Diferencias clave entre ERC-20 y ERC-721/1155, supply, divisibilidad y casos de uso. Incluye preguntas de selección múltiple para clasificar ejemplos.",
+      "image": "ipfs://placeholder/token-types.png",
+      "ipfsCid": "bafy-token-types",
+      "sectionCount": 4
+    },
+    {
+      "title": "Transferencias, approvals y gas",
+      "description": "Cómo funcionan transferencias directas, allowances (approve/transferFrom), límites de gasto y gas. Ejercicios de selección múltiple sobre rutas seguras de envío.",
+      "image": "ipfs://placeholder/transfers.png",
+      "ipfsCid": "bafy-token-transfers",
+      "sectionCount": 4
+    },
+    {
+      "title": "Buenas prácticas y riesgos",
+      "description": "Checklist de seguridad: phishing, revocar approvals, contratos proxy y cómo validar direcciones/tokenomics antes de interactuar. Incluye quiz final con escenarios.",
+      "image": "ipfs://placeholder/security.png",
+      "ipfsCid": "bafy-token-security",
+      "sectionCount": 3
+    }
+  ]
+}

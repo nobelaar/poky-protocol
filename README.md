@@ -64,6 +64,57 @@ npx hardhat run scripts/deploy-mock-verifier.ts --network <networkName>
 
 The scripts log the deployer account, target block, and initial totals so you can verify deployments quickly.
 
+### Create a track from a JSON payload
+
+Create modules that are missing and then register the track in one go by feeding a JSON file to `scripts/create-track.ts`.
+
+Example payload (`track.json`):
+
+```json
+{
+  "title": "Foundations",
+  "moduleIds": [0, 1],
+  "newModules": [
+    {
+      "title": "ZK 101",
+      "description": "Intro to zero-knowledge proofs",
+      "image": "ipfs://zk.png",
+      "ipfsCid": "bafy-123",
+      "sectionCount": 3
+    }
+  ]
+}
+```
+
+Run the script by passing registry addresses via flags or environment variables:
+
+```bash
+npx hardhat run scripts/create-track.ts --network <networkName> \
+  --input track.json \
+  --moduleRegistry <moduleRegistryAddress> \
+  --trackRegistry <trackRegistryAddress>
+```
+
+The script validates existing module IDs, creates any additional modules from the JSON (logging the generated IDs), and finally submits the `createTrack` transaction with the full ordered list.
+
+### Token basics example track (Spanish)
+
+For a longer example focused on ERC-20/721 fundamentals—including introductory info plus multiple-selection quizzes—you can use `examples/token-basics-track.json` as the input file. It defines four modules:
+
+1. **Bienvenida y setup de billetera** – onboarding and glossary before starting.
+2. **Fungibles vs no fungibles** – compares ERC-20 vs ERC-721/1155 with classification quizzes.
+3. **Transferencias, approvals y gas** – covers allowances, transfer flows, and safe-sending checks.
+4. **Buenas prácticas y riesgos** – security checklist with scenario-based questions.
+
+Run it the same way as any JSON payload:
+
+```bash
+npx hardhat run scripts/create-track.ts --network <networkName> \
+  --input examples/token-basics-track.json \
+  --moduleRegistry <moduleRegistryAddress> \
+  --trackRegistry <trackRegistryAddress>
+```
+
 ## Networks & Configuration
 
 - Hardhat config (`hardhat.config.ts`) enables the Hardhat 3 + viem toolbox and ships with profiles for the default local chain, an OP-style simulation (`hardhatOp`), and Sepolia.
