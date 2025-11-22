@@ -167,7 +167,8 @@ describe("LearningBadges", async () => {
       strict: true,
     });
     assert.equal(events.length, 1);
-    assert.equal(events[0].args.trackId, 0n);
+    const [mintEvent] = events as Array<{ args: { trackId: bigint } }>;
+    assert.equal(mintEvent.args.trackId, 0n);
   });
 
   it("prevents duplicate module badge mints", async () => {

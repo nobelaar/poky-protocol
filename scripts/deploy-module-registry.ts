@@ -14,5 +14,5 @@ console.log("ModuleRegistry deployed to:", moduleRegistry.address);
 console.log("Deployment block:", latestBlock.toString());
 console.log(
   "Initial total modules:",
-  (await moduleRegistry.read.totalModules()).toString(),
+  ((await moduleRegistry.read.totalModules()) as bigint).toString(),
 );

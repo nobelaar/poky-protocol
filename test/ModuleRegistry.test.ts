@@ -7,6 +7,17 @@ describe("ModuleRegistry", async () => {
   const { viem } = await network.connect();
   const publicClient = await viem.getPublicClient();
   const [deployer, secondary] = await viem.getWalletClients();
+  type ModuleStruct = {
+    id: bigint;
+    title: string;
+    description: string;
+    image: string;
+    author: `0x${string}`;
+    ipfsCid: string;
+    sectionCount: bigint;
+    version: bigint;
+    createdAt: bigint;
+  };
 
   const deployModuleRegistry = () => viem.deployContract("ModuleRegistry");
   type ModuleRegistryContract = Awaited<
@@ -48,7 +59,7 @@ describe("ModuleRegistry", async () => {
 
     await publicClient.waitForTransactionReceipt({ hash: txHash });
 
-    const total = await moduleRegistry.read.totalModules();
+    const total = (await moduleRegistry.read.totalModules()) as bigint;
     return total - 1n;
   };
 
@@ -79,7 +90,7 @@ describe("ModuleRegistry", async () => {
       blockNumber: receipt.blockNumber,
     });
 
-    const module = await moduleRegistry.read.getModule([0n]);
+    const module = (await moduleRegistry.read.getModule([0n])) as ModuleStruct;
 
     assert.equal(module.title, metadata.title);
     assert.equal(module.description, metadata.description);
@@ -105,8 +116,8 @@ describe("ModuleRegistry", async () => {
     assert.equal(firstId, 0n);
     assert.equal(secondId, 1n);
 
-    const first = await moduleRegistry.read.getModule([firstId]);
-    const second = await moduleRegistry.read.getModule([secondId]);
+    const first = (await moduleRegistry.read.getModule([firstId])) as ModuleStruct;
+    const second = (await moduleRegistry.read.getModule([secondId])) as ModuleStruct;
 
     assert.equal(first.id, 0n);
     assert.equal(second.id, 1n);
@@ -115,18 +126,18 @@ describe("ModuleRegistry", async () => {
   it("exposes stored modules via getModule", async () => {
     const moduleId = await createModule({ title: "Stored Module" });
 
-    const stored = await moduleRegistry.read.getModule([moduleId]);
+    const stored = (await moduleRegistry.read.getModule([moduleId])) as ModuleStruct;
 
     assert.equal(stored.title, "Stored Module");
   });
 
   it("tracks the total number of modules", async () => {
-    assert.equal(await moduleRegistry.read.totalModules(), 0n);
+    assert.equal((await moduleRegistry.read.totalModules()) as bigint, 0n);
 
     await createModule({ title: "Module A" });
     await createModule({ title: "Module B" });
 
-    assert.equal(await moduleRegistry.read.totalModules(), 2n);
+    assert.equal((await moduleRegistry.read.totalModules()) as bigint, 2n);
   });
 
   it("paginates modules with getModules", async () => {
@@ -135,8 +146,8 @@ describe("ModuleRegistry", async () => {
       await createModule({ title });
     }
 
-    const page = await moduleRegistry.read.getModules([1n, 2n]);
-    const pageTitles = page.map((module: any) => module.title);
+    const page = (await moduleRegistry.read.getModules([1n, 2n])) as ModuleStruct[];
+    const pageTitles = page.map((module) => module.title);
 
     assert.deepEqual(pageTitles, ["Beta", "Gamma"]);
   });
@@ -147,8 +158,8 @@ describe("ModuleRegistry", async () => {
       await createModule({ title });
     }
 
-    const page = await moduleRegistry.read.getModules([2n, 5n]);
-    const pageTitles = page.map((module: any) => module.title);
+    const page = (await moduleRegistry.read.getModules([2n, 5n])) as ModuleStruct[];
+    const pageTitles = page.map((module) => module.title);
 
     assert.deepEqual(pageTitles, ["Gamma"]);
   });

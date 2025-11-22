@@ -3,6 +3,7 @@ import path from "node:path";
 
 import { network } from "hardhat";
 import { create as createIpfsClient, type IPFSHTTPClient } from "ipfs-http-client";
+import { isAddress, type Address } from "viem";
 
 type SubsectionInput = {
   type: "INFO" | "MULTIPLE_SELECTION";
@@ -39,8 +40,8 @@ type TrackInput = {
 };
 
 type Addresses = {
-  moduleRegistry: string;
-  trackRegistry: string;
+  moduleRegistry: Address;
+  trackRegistry: Address;
 };
 
 const getArgValue = (flag: string) => {
@@ -64,7 +65,17 @@ const loadAddresses = (): Addresses => {
     );
   }
 
-  return { moduleRegistry, trackRegistry };
+  if (!isAddress(moduleRegistry)) {
+    throw new Error("Invalid moduleRegistry address.");
+  }
+  if (!isAddress(trackRegistry)) {
+    throw new Error("Invalid trackRegistry address.");
+  }
+
+  return {
+    moduleRegistry,
+    trackRegistry,
+  };
 };
 
 const readTrackFile = async (): Promise<TrackInput> => {
@@ -249,7 +260,8 @@ const normalizeNewModules = async (
 const logDivider = () => console.log("-----------------------------");
 
 const main = async () => {
-  const { viem } = await network.connect();
+  const connection = await network.connect();
+  const { viem } = connection;
   const publicClient = await viem.getPublicClient();
   const [deployer] = await viem.getWalletClients();
 
@@ -259,7 +271,7 @@ const main = async () => {
   const newModules = await normalizeNewModules(input.newModules, ipfsClient);
   const addresses = loadAddresses();
 
-  console.log("Network:", network.name);
+  console.log("Network:", connection.networkName);
   console.log("Deployer:", deployer.account.address);
   console.log("ModuleRegistry:", addresses.moduleRegistry);
   console.log("TrackRegistry:", addresses.trackRegistry);
@@ -274,7 +286,7 @@ const main = async () => {
     addresses.trackRegistry,
   );
 
-  const totalBefore = await moduleRegistry.read.totalModules();
+  const totalBefore = (await moduleRegistry.read.totalModules()) as bigint;
   console.log("Existing modules before script:", totalBefore.toString());
 
   moduleIds.forEach((id, index) => {
@@ -305,7 +317,7 @@ const main = async () => {
     );
 
     const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
-    const newTotal = await moduleRegistry.read.totalModules();
+    const newTotal = (await moduleRegistry.read.totalModules()) as bigint;
     const createdId = newTotal - 1n;
 
     createdModuleIds.push(createdId);
@@ -319,7 +331,7 @@ const main = async () => {
     throw new Error("No module ids provided and no new modules created.");
   }
 
-  const totalAfter = await moduleRegistry.read.totalModules();
+  const totalAfter = (await moduleRegistry.read.totalModules()) as bigint;
   finalModuleIds.forEach((id, index) => {
     if (id >= totalAfter) {
       throw new Error(
@@ -340,7 +352,7 @@ const main = async () => {
   const trackReceipt = await publicClient.waitForTransactionReceipt({
     hash: trackTxHash,
   });
-  const totalTracks = await trackRegistry.read.totalTracks();
+  const totalTracks = (await trackRegistry.read.totalTracks()) as bigint;
   const trackId = totalTracks - 1n;
 
   logDivider();

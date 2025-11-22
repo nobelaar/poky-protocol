@@ -34,5 +34,11 @@ export default defineConfig({
       url: configVariable("SEPOLIA_RPC_URL"),
       accounts: [configVariable("SEPOLIA_PRIVATE_KEY")],
     },
+    local: {
+      type: "http",
+      chainType: "l1",
+      url: "http://localhost:8545",
+      accounts: [configVariable("LOCAL_PRIVATE_KEY")],
+    },
   },
 });

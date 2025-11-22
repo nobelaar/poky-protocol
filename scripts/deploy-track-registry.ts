@@ -14,5 +14,5 @@ console.log("TrackRegistry deployed to:", trackRegistry.address);
 console.log("Deployment block:", latestBlock.toString());
 console.log(
   "Initial total tracks:",
-  (await trackRegistry.read.totalTracks()).toString(),
+  ((await trackRegistry.read.totalTracks()) as bigint).toString(),
 );

@@ -7,6 +7,13 @@ describe("TrackRegistry", async () => {
   const { viem } = await network.connect();
   const publicClient = await viem.getPublicClient();
   const [deployer, anotherAccount] = await viem.getWalletClients();
+  type TrackStruct = {
+    id: bigint;
+    title: string;
+    author: `0x${string}`;
+    moduleIds: bigint[];
+    createdAt: bigint;
+  };
 
   const deployTrackRegistry = () => viem.deployContract("TrackRegistry");
   type TrackRegistryContract = Awaited<
@@ -36,7 +43,7 @@ describe("TrackRegistry", async () => {
 
     await publicClient.waitForTransactionReceipt({ hash: txHash });
 
-    const total = await trackRegistry.read.totalTracks();
+    const total = (await trackRegistry.read.totalTracks()) as bigint;
     return total - 1n;
   };
 
@@ -54,7 +61,7 @@ describe("TrackRegistry", async () => {
       blockNumber: receipt.blockNumber,
     });
 
-    const track = await trackRegistry.read.getTrack([0n]);
+    const track = (await trackRegistry.read.getTrack([0n])) as TrackStruct;
 
     assert.equal(track.title, "Advanced ZK");
     assert.equal(
@@ -73,7 +80,7 @@ describe("TrackRegistry", async () => {
       author: anotherAccount.account,
     });
 
-    const created = await trackRegistry.read.getTrack([trackId]);
+    const created = (await trackRegistry.read.getTrack([trackId])) as TrackStruct;
 
     assert.deepEqual(created.moduleIds, moduleIds);
   });
@@ -92,7 +99,7 @@ describe("TrackRegistry", async () => {
   it("retrieves tracks by id", async () => {
     const trackId = await createTrack({ title: "Stored Track" });
 
-    const stored = await trackRegistry.read.getTrack([trackId]);
+    const stored = (await trackRegistry.read.getTrack([trackId])) as TrackStruct;
 
     assert.equal(stored.title, "Stored Track");
   });
@@ -102,7 +109,7 @@ describe("TrackRegistry", async () => {
     await createTrack({ title: "Track B" });
     await createTrack({ title: "Track C" });
 
-    assert.equal(await trackRegistry.read.totalTracks(), 3n);
+    assert.equal((await trackRegistry.read.totalTracks()) as bigint, 3n);
   });
 
   it("returns the correct slice when paginating tracks", async () => {
@@ -111,8 +118,8 @@ describe("TrackRegistry", async () => {
       await createTrack({ title });
     }
 
-    const page = await trackRegistry.read.getTracks([1n, 2n]);
-    const pageTitles = page.map((track: any) => track.title);
+    const page = (await trackRegistry.read.getTracks([1n, 2n])) as TrackStruct[];
+    const pageTitles = page.map((track) => track.title);
 
     assert.deepEqual(pageTitles, ["Two", "Three"]);
   });
@@ -120,7 +127,7 @@ describe("TrackRegistry", async () => {
   it("allows pagination ranges that overflow the available amount", async () => {
     await createTrack({ title: "Solo track" });
 
-    const page = await trackRegistry.read.getTracks([0n, 5n]);
+    const page = (await trackRegistry.read.getTracks([0n, 5n])) as TrackStruct[];
 
     assert.equal(page.length, 1);
     assert.equal(page[0].title, "Solo track");
