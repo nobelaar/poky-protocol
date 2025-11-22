@@ -9,9 +9,6 @@ interface ILearningBadges {
         uint256 indexed moduleId
     );
 
-    /// @notice Address allowed to mint badges (protocol or zk verifier)
-    function minter() external view returns (address);
-
     /// @notice Mints a soulbound badge for a completed module
     /// @dev Should revert if `to` already has a badge for this moduleId
     function mintModuleBadge(

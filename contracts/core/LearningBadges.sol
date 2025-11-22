@@ -39,7 +39,6 @@ contract LearningBadges is ILearningBadges {
 
     IModuleProgress public immutable moduleProgress;
     ITrackRegistry public immutable trackRegistry;
-    address public immutable override minter;
 
     uint256 private nextTokenId;
     mapping(uint256 => Badge) private badges;
@@ -55,7 +54,6 @@ contract LearningBadges is ILearningBadges {
         require(trackRegistryAddress != address(0), "invalid track registry");
         moduleProgress = IModuleProgress(moduleProgressAddress);
         trackRegistry = ITrackRegistry(trackRegistryAddress);
-        minter = address(0);
     }
 
     /// @inheritdoc ILearningBadges
