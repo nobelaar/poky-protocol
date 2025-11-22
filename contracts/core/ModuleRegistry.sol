@@ -16,8 +16,10 @@ contract ModuleRegistry is IModuleRegistry {
         string calldata title,
         string calldata description,
         string calldata image,
-        string calldata ipfsCid
+        string calldata ipfsCid,
+        uint256 sectionCount
     ) external override returns (uint256 moduleId) {
+        require(sectionCount > 0, "sectionCount required");
         moduleId = modules.length;
 
         Types.Module memory newModule = Types.Module({
@@ -27,6 +29,7 @@ contract ModuleRegistry is IModuleRegistry {
             image: image,
             author: msg.sender,
             ipfsCid: ipfsCid,
+            sectionCount: sectionCount,
             version: 1,
             createdAt: block.timestamp
         });

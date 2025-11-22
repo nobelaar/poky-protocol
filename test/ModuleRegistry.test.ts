@@ -25,16 +25,24 @@ describe("ModuleRegistry", async () => {
     image?: string;
     ipfsCid?: string;
     author?: typeof deployer.account;
+    sectionCount?: bigint;
   }) => {
     const args = {
       title: options?.title ?? "ZK 101",
       description: options?.description ?? "Intro to zero-knowledge",
       image: options?.image ?? "ipfs://module.png",
       ipfsCid: options?.ipfsCid ?? "bafy-module",
+      sectionCount: options?.sectionCount ?? 1n,
     };
 
     const txHash = await moduleRegistry.write.createModule(
-      [args.title, args.description, args.image, args.ipfsCid],
+      [
+        args.title,
+        args.description,
+        args.image,
+        args.ipfsCid,
+        args.sectionCount,
+      ],
       { account: options?.author ?? deployer.account },
     );
 
@@ -50,10 +58,17 @@ describe("ModuleRegistry", async () => {
       description: "How restaking works",
       image: "ipfs://image.png",
       ipfsCid: "bafy-image",
+      sectionCount: 3n,
     };
 
     const txHash = await moduleRegistry.write.createModule(
-      [metadata.title, metadata.description, metadata.image, metadata.ipfsCid],
+      [
+        metadata.title,
+        metadata.description,
+        metadata.image,
+        metadata.ipfsCid,
+        metadata.sectionCount,
+      ],
       { account: deployer.account },
     );
 
@@ -70,6 +85,7 @@ describe("ModuleRegistry", async () => {
     assert.equal(module.description, metadata.description);
     assert.equal(module.image, metadata.image);
     assert.equal(module.ipfsCid, metadata.ipfsCid);
+    assert.equal(module.sectionCount, metadata.sectionCount);
     assert.equal(
       module.author.toLowerCase(),
       deployer.account.address.toLowerCase(),

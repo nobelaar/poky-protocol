@@ -17,7 +17,8 @@ interface IModuleRegistry {
         string calldata title,
         string calldata description,
         string calldata image,
-        string calldata ipfsCid
+        string calldata ipfsCid,
+        uint256 sectionCount
     ) external returns (uint256 moduleId);
 
     /// @notice Returns a single module by id

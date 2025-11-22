@@ -28,6 +28,7 @@ describe("ModuleProgress (ZK)", async () => {
   let verifier: MockVerifierContract;
   let moduleProgress: ModuleProgressContract;
   const moduleId = 0n;
+  const sectionCount = 2n;
 
   const asUint = (address: `0x${string}`) => BigInt(address);
 
@@ -37,6 +38,7 @@ describe("ModuleProgress (ZK)", async () => {
   const defaultProof = (
     user: `0x${string}`,
     moduleIdParam: bigint,
+    sectionId: bigint,
     commitment: `0x${string}`,
   ) => {
     const a: [bigint, bigint] = [1n, 2n];
@@ -48,6 +50,7 @@ describe("ModuleProgress (ZK)", async () => {
     const input = [
       asUint(user),
       moduleIdParam,
+      sectionId,
       BigInt(commitment),
     ];
 
@@ -66,7 +69,13 @@ describe("ModuleProgress (ZK)", async () => {
   beforeEach(async () => {
     moduleRegistry = await deployModuleRegistry();
     await moduleRegistry.write.createModule(
-      ["Intro to Cryptography", "Hashes", "ipfs://module.png", "bafy-module"],
+      [
+        "Intro to Cryptography",
+        "Hashes",
+        "ipfs://module.png",
+        "bafy-module",
+        sectionCount,
+      ],
       { account: author.account },
     );
 
@@ -78,23 +87,51 @@ describe("ModuleProgress (ZK)", async () => {
   });
 
   it("records module completion with a valid proof", async () => {
-    const commitment = commitmentFor("4", "salt");
-    await moduleProgress.write.setModuleCommitment(
-      [moduleId, commitment],
+    const commitment0 = commitmentFor("4", "salt");
+    const commitment1 = commitmentFor("5", "salt");
+    await moduleProgress.write.setSectionCommitment(
+      [moduleId, commitment0],
       { account: author.account },
     );
-    const proof = defaultProof(
+    await moduleProgress.write.setSectionCommitment(
+      [moduleId, commitment1],
+      { account: author.account },
+    );
+
+    const proof0 = defaultProof(
       learner.account.address,
       moduleId,
-      commitment,
+      0n,
+      commitment0,
     );
-    await registerProof(proof);
-
-    const txHash = await moduleProgress.write.claimModuleCompletion(
-      [moduleId, proof.a, proof.b, proof.c, proof.input],
+    await registerProof(proof0);
+    const txHash0 = await moduleProgress.write.claimSectionCompletion(
+      [moduleId, 0n, proof0.a, proof0.b, proof0.c, proof0.input],
       { account: learner.account },
     );
-    await publicClient.waitForTransactionReceipt({ hash: txHash });
+    await publicClient.waitForTransactionReceipt({ hash: txHash0 });
+
+    assert.equal(
+      await moduleProgress.read.hasCompletedSection([
+        learner.account.address,
+        moduleId,
+        0n,
+      ]),
+      true,
+    );
+
+    const proof1 = defaultProof(
+      learner.account.address,
+      moduleId,
+      1n,
+      commitment1,
+    );
+    await registerProof(proof1);
+    const txHash1 = await moduleProgress.write.claimSectionCompletion(
+      [moduleId, 1n, proof1.a, proof1.b, proof1.c, proof1.input],
+      { account: learner.account },
+    );
+    await publicClient.waitForTransactionReceipt({ hash: txHash1 });
 
     assert.equal(
       await moduleProgress.read.hasCompletedModule([
@@ -107,7 +144,7 @@ describe("ModuleProgress (ZK)", async () => {
 
   it("rejects proofs if the Groth16 verifier returns false", async () => {
     const commitment = commitmentFor("4", "salt");
-    await moduleProgress.write.setModuleCommitment(
+    await moduleProgress.write.setSectionCommitment(
       [moduleId, commitment],
       { account: author.account },
     );
@@ -115,12 +152,13 @@ describe("ModuleProgress (ZK)", async () => {
     const proof = defaultProof(
       learner.account.address,
       moduleId,
+      0n,
       commitment,
     );
 
     await viem.assertions.revertWithCustomError(
-      moduleProgress.write.claimModuleCompletion(
-        [moduleId, proof.a, proof.b, proof.c, proof.input],
+      moduleProgress.write.claimSectionCompletion(
+        [moduleId, 0n, proof.a, proof.b, proof.c, proof.input],
         { account: learner.account },
       ),
       moduleProgress,
@@ -130,17 +168,22 @@ describe("ModuleProgress (ZK)", async () => {
 
   it("requires matching public inputs for user and module", async () => {
     const commitment = commitmentFor("4", "salt");
-    await moduleProgress.write.setModuleCommitment(
+    await moduleProgress.write.setSectionCommitment(
       [moduleId, commitment],
       { account: author.account },
     );
-    const proof = defaultProof(learner.account.address, moduleId, commitment);
+    const proof = defaultProof(
+      learner.account.address,
+      moduleId,
+      0n,
+      commitment,
+    );
     proof.input[0] = asUint(attacker.account.address);
     await registerProof(proof);
 
     await viem.assertions.revertWithCustomError(
-      moduleProgress.write.claimModuleCompletion(
-        [moduleId, proof.a, proof.b, proof.c, proof.input],
+      moduleProgress.write.claimSectionCompletion(
+        [moduleId, 0n, proof.a, proof.b, proof.c, proof.input],
         { account: learner.account },
       ),
       moduleProgress,
@@ -152,13 +195,14 @@ describe("ModuleProgress (ZK)", async () => {
     const proof = defaultProof(
       learner.account.address,
       moduleId,
+      0n,
       commitmentFor("4", "salt"),
     );
     await registerProof(proof);
 
     await viem.assertions.revertWithCustomError(
-      moduleProgress.write.claimModuleCompletion(
-        [moduleId, proof.a, proof.b, proof.c, proof.input],
+      moduleProgress.write.claimSectionCompletion(
+        [moduleId, 0n, proof.a, proof.b, proof.c, proof.input],
         { account: learner.account },
       ),
       moduleProgress,
@@ -168,35 +212,36 @@ describe("ModuleProgress (ZK)", async () => {
 
   it("prevents double completions", async () => {
     const commitment = commitmentFor("4", "salt");
-    await moduleProgress.write.setModuleCommitment(
+    await moduleProgress.write.setSectionCommitment(
       [moduleId, commitment],
       { account: author.account },
     );
     const proof = defaultProof(
       learner.account.address,
       moduleId,
+      0n,
       commitment,
     );
     await registerProof(proof);
-    await moduleProgress.write.claimModuleCompletion(
-      [moduleId, proof.a, proof.b, proof.c, proof.input],
+    await moduleProgress.write.claimSectionCompletion(
+      [moduleId, 0n, proof.a, proof.b, proof.c, proof.input],
       { account: learner.account },
     );
 
     await viem.assertions.revertWithCustomError(
-      moduleProgress.write.claimModuleCompletion(
-        [moduleId, proof.a, proof.b, proof.c, proof.input],
+      moduleProgress.write.claimSectionCompletion(
+        [moduleId, 0n, proof.a, proof.b, proof.c, proof.input],
         { account: learner.account },
       ),
       moduleProgress,
-      "AlreadyCompleted",
+      "SectionAlreadyCompleted",
     );
   });
 
   it("only allows module authors to set commitments", async () => {
     const commitment = commitmentFor("secret", "salt");
     await viem.assertions.revertWithCustomError(
-      moduleProgress.write.setModuleCommitment([moduleId, commitment], {
+      moduleProgress.write.setSectionCommitment([moduleId, commitment], {
         account: attacker.account,
       }),
       moduleProgress,

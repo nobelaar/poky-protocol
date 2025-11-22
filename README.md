@@ -9,15 +9,15 @@ This repo hosts the first smart contracts for Poky, a minimal knowledge protocol
 
 - `contracts/core/ModuleRegistry.sol` stores immutable metadata for learning modules (titles, descriptions, images, IPFS CIDs, authors, timestamps). IDs are the array index and events surface the author/IPFS pair.
 - `contracts/core/TrackRegistry.sol` keeps higher-level learning tracks composed of ordered module IDs. Tracks require at least one module and also store the author + timestamp.
-- `contracts/core/ModuleProgress.sol` stores module completion commitments and checks Groth16 proofs (via an external verifier contract) before emitting `ModuleCompleted`.
+- `contracts/core/ModuleProgress.sol` stores section commitments for each module and checks Groth16 proofs (via an external verifier contract) before emitting `ModuleCompleted`.
 - `contracts/core/LearningBadges.sol` mints soulbound badges for module or track completions once `ModuleProgress` shows every prerequisite is done (users mint their own badges; transfers are blocked; burning is opt-in).
 - Structs live in `contracts/interfaces/Types.sol`; external-facing interfaces sit in `contracts/interfaces/IModuleRegistry.sol` and `contracts/interfaces/ITrackRegistry.sol`.
 
 ## Completion + Badge Flow
 
 1. **Module + track creation:** authors register modules (and optional tracks).
-2. **Publish commitment:** the module author records a commitment hash (e.g. `keccak256(answer || salt)`) via `ModuleProgress.setModuleCommitment`. This hash is the public value the proof must match.
-3. **Learner proves completion:** off-chain tooling (circom/snarkjs or any Groth16-compatible stack) generates a proof that the learner knows a preimage matching the commitment. Public inputs follow `[uint256(userAddress), moduleId, commitment]`.
+2. **Publish commitments:** the module author records a commitment hash (e.g. `keccak256(answer || salt)`) per section via `ModuleProgress.setSectionCommitment`. Each call registers the next section until reaching the module's `sectionCount`.
+3. **Learner proves completion:** off-chain tooling (circom/snarkjs or any Groth16-compatible stack) generates a proof that the learner knows a preimage matching the section commitment. Public inputs follow `[uint256(userAddress), moduleId, sectionId, commitment]`.
 4. **On-chain verification:** `claimModuleCompletion(moduleId, a, b, c, input)` calls an external Groth16 verifier; if the proof is valid, the learner is marked complete and `ModuleCompleted` fires.
 5. **Badge mint:** learners call `mintModuleBadge(msg.sender, moduleId)` or `mintTrackBadge(trackId)` from `LearningBadges`. The contract checks `ModuleProgress` state, prevents duplicates, and allows optional burns.
 
@@ -41,7 +41,7 @@ TypeScript tests in `test/ModuleRegistry.test.ts` and `test/TrackRegistry.test.t
 - Pagination helpers (`getModules`, `getTracks`) including overflows.
 - Total counters.
 - Custom-error reverts for invalid IDs and empty module arrays.
-- `test/ModuleProgress.test.ts` checks the proof-driven completion flow, public input validation, and author-only commitment publishing (it relies on a mock Groth16 verifier for local development).
+- `test/ModuleProgress.test.ts` checks the proof-driven completion flow across multiple sections, public input validation, and author-only commitment publishing (it relies on a mock Groth16 verifier for local development).
 - `test/LearningBadges.test.ts` covers module and track badge minting, duplicate prevention, and burns on top of the zero-knowledge completions.
 
 Run them with:
