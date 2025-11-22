@@ -70,7 +70,10 @@ describe("ModuleRegistry", async () => {
     assert.equal(module.description, metadata.description);
     assert.equal(module.image, metadata.image);
     assert.equal(module.ipfsCid, metadata.ipfsCid);
-    assert.equal(module.author, deployer.account.address);
+    assert.equal(
+      module.author.toLowerCase(),
+      deployer.account.address.toLowerCase(),
+    );
     assert.equal(module.createdAt, block.timestamp);
   });
 

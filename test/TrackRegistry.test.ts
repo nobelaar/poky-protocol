@@ -57,7 +57,10 @@ describe("TrackRegistry", async () => {
     const track = await trackRegistry.read.getTrack([0n]);
 
     assert.equal(track.title, "Advanced ZK");
-    assert.equal(track.author, deployer.account.address);
+    assert.equal(
+      track.author.toLowerCase(),
+      deployer.account.address.toLowerCase(),
+    );
     assert.deepEqual(track.moduleIds, moduleIds);
     assert.equal(track.createdAt, block.timestamp);
   });
