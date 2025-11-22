@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { beforeEach, describe, it } from "node:test";
 
 import { network } from "hardhat";
-import { encodePacked, hexToBytes, keccak256 } from "viem";
+import { encodePacked, keccak256 } from "viem";
 
 describe("LearningBadges", async () => {
   const { viem } = await network.connect();
@@ -11,8 +11,11 @@ describe("LearningBadges", async () => {
 
   const deployModuleRegistry = () => viem.deployContract("ModuleRegistry");
   const deployTrackRegistry = () => viem.deployContract("TrackRegistry");
-  const deployModuleProgress = (registryAddress: `0x${string}`) =>
-    viem.deployContract("ModuleProgress", [registryAddress]);
+  const deployVerifier = () => viem.deployContract("MockGroth16Verifier");
+  const deployModuleProgress = (
+    registryAddress: `0x${string}`,
+    verifierAddress: `0x${string}`,
+  ) => viem.deployContract("ModuleProgress", [registryAddress, verifierAddress]);
   const deployLearningBadges = (
     progress: `0x${string}`,
     trackRegistry: `0x${string}`,
@@ -28,11 +31,58 @@ describe("LearningBadges", async () => {
   type LearningBadgesContract = Awaited<
     ReturnType<typeof deployLearningBadges>
   >;
+  type MockVerifierContract = Awaited<ReturnType<typeof deployVerifier>>;
 
   let moduleRegistry: ModuleRegistryContract;
   let trackRegistry: TrackRegistryContract;
   let moduleProgress: ModuleProgressContract;
   let learningBadges: LearningBadgesContract;
+  let verifier: MockVerifierContract;
+
+  const addressAsUint = (address: `0x${string}`) => BigInt(address);
+  const makeCommitment = (answer: string, salt: string) =>
+    keccak256(encodePacked(["string", "string"], [answer, salt]));
+
+  const buildProof = (
+    moduleId: bigint,
+    commitment: `0x${string}`,
+    offset: bigint,
+  ) => {
+    const a: [bigint, bigint] = [1n + offset, 2n + offset];
+    const b: [[bigint, bigint], [bigint, bigint]] = [
+      [3n + offset, 4n + offset],
+      [5n + offset, 6n + offset],
+    ];
+    const c: [bigint, bigint] = [7n + offset, 8n + offset];
+    const input = [
+      addressAsUint(learner.account.address),
+      moduleId,
+      BigInt(commitment),
+    ];
+    return { a, b, c, input };
+  };
+
+  const registerProof = async (proof: ReturnType<typeof buildProof>) => {
+    await verifier.write.setValidProof([proof.a, proof.b, proof.c, proof.input]);
+  };
+
+  const claimCompletion = async (
+    moduleId: bigint,
+    commitment: `0x${string}`,
+    offset: bigint,
+  ) => {
+    await moduleProgress.write.setModuleCommitment(
+      [moduleId, commitment],
+      { account: author.account },
+    );
+    const proof = buildProof(moduleId, commitment, offset);
+    await registerProof(proof);
+    const txHash = await moduleProgress.write.claimModuleCompletion(
+      [moduleId, proof.a, proof.b, proof.c, proof.input],
+      { account: learner.account },
+    );
+    await publicClient.waitForTransactionReceipt({ hash: txHash });
+  };
 
   beforeEach(async () => {
     moduleRegistry = await deployModuleRegistry();
@@ -51,42 +101,20 @@ describe("LearningBadges", async () => {
       { account: author.account },
     );
 
-    moduleProgress = await deployModuleProgress(moduleRegistry.address);
+    verifier = await deployVerifier();
+    moduleProgress = await deployModuleProgress(
+      moduleRegistry.address,
+      verifier.address,
+    );
     learningBadges = await deployLearningBadges(
       moduleProgress.address,
       trackRegistry.address,
     );
   });
 
-  const signCompletion = async (
-    userAddress: `0x${string}`,
-    moduleId: bigint,
-    nonce: bigint,
-  ) => {
-    const digest = keccak256(
-      encodePacked(
-        ["address", "address", "uint256", "uint256"],
-        [moduleProgress.address, userAddress, moduleId, nonce],
-      ),
-    );
-
-    return author.signMessage({
-      account: author.account,
-      message: { raw: hexToBytes(digest) },
-    });
-  };
-
-  const claimCompletion = async (moduleId: bigint, nonce: bigint) => {
-    const signature = await signCompletion(learner.account.address, moduleId, nonce);
-    const txHash = await moduleProgress.write.claimModuleCompletion(
-      [moduleId, nonce, signature],
-      { account: learner.account },
-    );
-    await publicClient.waitForTransactionReceipt({ hash: txHash });
-  };
-
   it("mints module badges after completion proofs", async () => {
-    await claimCompletion(0n, 1n);
+    const commitment = makeCommitment("answer1", "salt1");
+    await claimCompletion(0n, commitment, 0n);
 
     const txHash = await learningBadges.write.mintModuleBadge(
       [learner.account.address, 0n],
@@ -112,7 +140,9 @@ describe("LearningBadges", async () => {
   });
 
   it("mints track badges only after all modules are completed", async () => {
-    await claimCompletion(0n, 1n);
+    const commitment0 = makeCommitment("answer1", "salt1");
+    const commitment1 = makeCommitment("answer2", "salt2");
+    await claimCompletion(0n, commitment0, 0n);
     await viem.assertions.revertWithCustomError(
       learningBadges.write.mintTrackBadge([0n], {
         account: learner.account,
@@ -121,7 +151,7 @@ describe("LearningBadges", async () => {
       "TrackModulesIncomplete",
     );
 
-    await claimCompletion(1n, 2n);
+    await claimCompletion(1n, commitment1, 10n);
     const txHash = await learningBadges.write.mintTrackBadge([0n], {
       account: learner.account,
     });
@@ -138,7 +168,8 @@ describe("LearningBadges", async () => {
   });
 
   it("prevents duplicate module badge mints", async () => {
-    await claimCompletion(0n, 1n);
+    const commitment = makeCommitment("answer1", "salt1");
+    await claimCompletion(0n, commitment, 0n);
     const mintTx = await learningBadges.write.mintModuleBadge(
       [learner.account.address, 0n],
       { account: learner.account },
@@ -155,11 +186,13 @@ describe("LearningBadges", async () => {
   });
 
   it("allows holders to burn their badge", async () => {
-    await claimCompletion(0n, 1n);
-    await learningBadges.write.mintModuleBadge(
+    const commitment = makeCommitment("answer1", "salt1");
+    await claimCompletion(0n, commitment, 0n);
+    const mintTx = await learningBadges.write.mintModuleBadge(
       [learner.account.address, 0n],
       { account: learner.account },
     );
+    await publicClient.waitForTransactionReceipt({ hash: mintTx });
 
     const badgeId = await learningBadges.read.moduleBadgeTokenId([
       learner.account.address,

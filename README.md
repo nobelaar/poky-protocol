@@ -9,31 +9,17 @@ This repo hosts the first smart contracts for Poky, a minimal knowledge protocol
 
 - `contracts/core/ModuleRegistry.sol` stores immutable metadata for learning modules (titles, descriptions, images, IPFS CIDs, authors, timestamps). IDs are the array index and events surface the author/IPFS pair.
 - `contracts/core/TrackRegistry.sol` keeps higher-level learning tracks composed of ordered module IDs. Tracks require at least one module and also store the author + timestamp.
-- `contracts/core/ModuleProgress.sol` lets learners permissionlessly record completed modules using author-signed attestations, emitting `ModuleCompleted` events that `LearningBadges` consumes.
+- `contracts/core/ModuleProgress.sol` stores module completion commitments and checks Groth16 proofs (via an external verifier contract) before emitting `ModuleCompleted`.
 - `contracts/core/LearningBadges.sol` mints soulbound badges for module or track completions once `ModuleProgress` shows every prerequisite is done (users mint their own badges; transfers are blocked; burning is opt-in).
 - Structs live in `contracts/interfaces/Types.sol`; external-facing interfaces sit in `contracts/interfaces/IModuleRegistry.sol` and `contracts/interfaces/ITrackRegistry.sol`.
 
 ## Completion + Badge Flow
 
-1. **Module + track creation:** authors register modules (and optional tracks) with the registries.
-2. **Off-chain challenge:** when a learner completes a module, the author (or any permissionless checker) signs `keccak256(abi.encodePacked(ModuleProgress, learner, moduleId, nonce))`. Only this digest, not the answer, is revealed.
-3. **On-chain completion:** the learner calls `ModuleProgress.claimModuleCompletion(moduleId, nonce, signature)` and the contract verifies the signature against the module author, marks the completion, and emits `ModuleCompleted`.
-4. **Badge mint:** the learner mints `mintModuleBadge(msg.sender, moduleId)` or `mintTrackBadge(trackId)` from `LearningBadges`. The contract cross-checks `ModuleProgress` and prevents duplicates; burns clear the badge record so it can be reclaimed later.
-
-### Signature helper
-
-Use the helper script to produce signatures for learners:
-
-```bash
-npx hardhat run scripts/sign-module-completion.ts --network hardhat \
-  0xModuleProgressAddress \
-  0xLearnerAddress \
-  0 \
-  1
-```
-
-It signs with the first Hardhat account by default and prints the final signature plus all parameters so you can hand it to the learner.
-The last two arguments correspond to the target `moduleId` and the unique `nonce` for that attestation.
+1. **Module + track creation:** authors register modules (and optional tracks).
+2. **Publish commitment:** the module author records a commitment hash (e.g. `keccak256(answer || salt)`) via `ModuleProgress.setModuleCommitment`. This hash is the public value the proof must match.
+3. **Learner proves completion:** off-chain tooling (circom/snarkjs or any Groth16-compatible stack) generates a proof that the learner knows a preimage matching the commitment. Public inputs follow `[uint256(userAddress), moduleId, commitment]`.
+4. **On-chain verification:** `claimModuleCompletion(moduleId, a, b, c, input)` calls an external Groth16 verifier; if the proof is valid, the learner is marked complete and `ModuleCompleted` fires.
+5. **Badge mint:** learners call `mintModuleBadge(msg.sender, moduleId)` or `mintTrackBadge(trackId)` from `LearningBadges`. The contract checks `ModuleProgress` state, prevents duplicates, and allows optional burns.
 
 ### Badge mint demo
 
@@ -55,8 +41,8 @@ TypeScript tests in `test/ModuleRegistry.test.ts` and `test/TrackRegistry.test.t
 - Pagination helpers (`getModules`, `getTracks`) including overflows.
 - Total counters.
 - Custom-error reverts for invalid IDs and empty module arrays.
-- `test/ModuleProgress.test.ts` verifies the signature flow (valid proofs, replay protection, module existence).
-- `test/LearningBadges.test.ts` covers module and track badge minting, duplicate prevention, and burns.
+- `test/ModuleProgress.test.ts` checks the proof-driven completion flow, public input validation, and author-only commitment publishing (it relies on a mock Groth16 verifier for local development).
+- `test/LearningBadges.test.ts` covers module and track badge minting, duplicate prevention, and burns on top of the zero-knowledge completions.
 
 Run them with:
 
@@ -73,7 +59,6 @@ Use the provided scripts to deploy the MVP contracts to any configured network:
 ```bash
 npx hardhat run scripts/deploy-module-registry.ts --network <networkName>
 npx hardhat run scripts/deploy-track-registry.ts --network <networkName>
-npx hardhat run scripts/sign-module-completion.ts --network <networkName> <ModuleProgress> <Learner> <ModuleId> <Nonce>
 ```
 
 The scripts log the deployer account, target block, and initial totals so you can verify deployments quickly.
@@ -85,4 +70,4 @@ The scripts log the deployer account, target block, and initial totals so you ca
 
 ## Roadmap
 
-Next steps include swapping signature attestations for lightweight ZK proofs, integrating badge-aware frontends, and adding richer course metadata. Contributions are welcome—open an issue or PR if you want to extend Poky!***
+Next steps include wiring the real Groth16 verifier contracts generated by `snarkjs`, shipping a CLI to create proofs from module answers, and integrating badge-aware frontends. Contributions are welcome—open an issue or PR if you want to extend Poky!***

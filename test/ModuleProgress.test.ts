@@ -2,26 +2,66 @@ import assert from "node:assert/strict";
 import { beforeEach, describe, it } from "node:test";
 
 import { network } from "hardhat";
-import { encodePacked, hexToBytes, keccak256 } from "viem";
+import { encodePacked, keccak256 } from "viem";
 
-describe("ModuleProgress", async () => {
+describe("ModuleProgress (ZK)", async () => {
   const { viem } = await network.connect();
   const publicClient = await viem.getPublicClient();
   const [author, learner, attacker] = await viem.getWalletClients();
 
   const deployModuleRegistry = () => viem.deployContract("ModuleRegistry");
-  const deployModuleProgress = (registryAddress: `0x${string}`) =>
-    viem.deployContract("ModuleProgress", [registryAddress]);
+  const deployVerifier = () => viem.deployContract("MockGroth16Verifier");
+  const deployModuleProgress = (
+    registryAddress: `0x${string}`,
+    verifierAddress: `0x${string}`,
+  ) => viem.deployContract("ModuleProgress", [registryAddress, verifierAddress]);
 
   type ModuleRegistryContract = Awaited<
     ReturnType<typeof deployModuleRegistry>
   >;
+  type MockVerifierContract = Awaited<ReturnType<typeof deployVerifier>>;
   type ModuleProgressContract = Awaited<
     ReturnType<typeof deployModuleProgress>
   >;
 
   let moduleRegistry: ModuleRegistryContract;
+  let verifier: MockVerifierContract;
   let moduleProgress: ModuleProgressContract;
+  const moduleId = 0n;
+
+  const asUint = (address: `0x${string}`) => BigInt(address);
+
+  const commitmentFor = (answer: string, salt: string) =>
+    keccak256(encodePacked(["string", "string"], [answer, salt]));
+
+  const defaultProof = (
+    user: `0x${string}`,
+    moduleIdParam: bigint,
+    commitment: `0x${string}`,
+  ) => {
+    const a: [bigint, bigint] = [1n, 2n];
+    const b: [[bigint, bigint], [bigint, bigint]] = [
+      [3n, 4n],
+      [5n, 6n],
+    ];
+    const c: [bigint, bigint] = [7n, 8n];
+    const input = [
+      asUint(user),
+      moduleIdParam,
+      BigInt(commitment),
+    ];
+
+    return { a, b, c, input };
+  };
+
+  const registerProof = async (proof: ReturnType<typeof defaultProof>) => {
+    await verifier.write.setValidProof([
+      proof.a,
+      proof.b,
+      proof.c,
+      proof.input,
+    ]);
+  };
 
   beforeEach(async () => {
     moduleRegistry = await deployModuleRegistry();
@@ -30,42 +70,30 @@ describe("ModuleProgress", async () => {
       { account: author.account },
     );
 
-    moduleProgress = await deployModuleProgress(moduleRegistry.address);
+    verifier = await deployVerifier();
+    moduleProgress = await deployModuleProgress(
+      moduleRegistry.address,
+      verifier.address,
+    );
   });
 
-  const signCompletion = async (
-    userAddress: `0x${string}`,
-    moduleId: bigint,
-    nonce: bigint,
-    signer = author,
-  ) => {
-    const digest = keccak256(
-      encodePacked(
-        ["address", "address", "uint256", "uint256"],
-        [moduleProgress.address, userAddress, moduleId, nonce],
-      ),
+  it("records module completion with a valid proof", async () => {
+    const commitment = commitmentFor("4", "salt");
+    await moduleProgress.write.setModuleCommitment(
+      [moduleId, commitment],
+      { account: author.account },
     );
-
-    return signer.signMessage({
-      account: signer.account,
-      message: { raw: hexToBytes(digest) },
-    });
-  };
-
-  it("records module completion with a valid author signature", async () => {
-    const moduleId = 0n;
-    const nonce = 1n;
-    const signature = await signCompletion(
+    const proof = defaultProof(
       learner.account.address,
       moduleId,
-      nonce,
+      commitment,
     );
+    await registerProof(proof);
 
     const txHash = await moduleProgress.write.claimModuleCompletion(
-      [moduleId, nonce, signature],
+      [moduleId, proof.a, proof.b, proof.c, proof.input],
       { account: learner.account },
     );
-
     await publicClient.waitForTransactionReceipt({ hash: txHash });
 
     assert.equal(
@@ -77,86 +105,102 @@ describe("ModuleProgress", async () => {
     );
   });
 
-  it("rejects signatures from non-authors", async () => {
-    const signature = await signCompletion(
+  it("rejects proofs if the Groth16 verifier returns false", async () => {
+    const commitment = commitmentFor("4", "salt");
+    await moduleProgress.write.setModuleCommitment(
+      [moduleId, commitment],
+      { account: author.account },
+    );
+
+    const proof = defaultProof(
       learner.account.address,
-      0n,
-      777n,
-      attacker,
+      moduleId,
+      commitment,
     );
 
     await viem.assertions.revertWithCustomError(
-      moduleProgress.write.claimModuleCompletion([0n, 777n, signature], {
-        account: learner.account,
-      }),
+      moduleProgress.write.claimModuleCompletion(
+        [moduleId, proof.a, proof.b, proof.c, proof.input],
+        { account: learner.account },
+      ),
       moduleProgress,
-      "InvalidSignature",
+      "InvalidProof",
     );
   });
 
-  it("prevents replaying the same signature hash", async () => {
-    const nonce = 42n;
-    const signature = await signCompletion(
-      learner.account.address,
-      0n,
-      nonce,
+  it("requires matching public inputs for user and module", async () => {
+    const commitment = commitmentFor("4", "salt");
+    await moduleProgress.write.setModuleCommitment(
+      [moduleId, commitment],
+      { account: author.account },
     );
-
-    const firstTx = await moduleProgress.write.claimModuleCompletion(
-      [0n, nonce, signature],
-      { account: learner.account },
-    );
-    await publicClient.waitForTransactionReceipt({ hash: firstTx });
+    const proof = defaultProof(learner.account.address, moduleId, commitment);
+    proof.input[0] = asUint(attacker.account.address);
+    await registerProof(proof);
 
     await viem.assertions.revertWithCustomError(
-      moduleProgress.write.claimModuleCompletion([0n, nonce, signature], {
-        account: learner.account,
-      }),
+      moduleProgress.write.claimModuleCompletion(
+        [moduleId, proof.a, proof.b, proof.c, proof.input],
+        { account: learner.account },
+      ),
       moduleProgress,
-      "SignatureAlreadyUsed",
+      "InvalidPublicInputs",
     );
   });
 
-  it("blocks double completion even with fresh signatures", async () => {
-    const firstSignature = await signCompletion(
+  it("requires module commitments to be published", async () => {
+    const proof = defaultProof(
       learner.account.address,
-      0n,
-      1n,
+      moduleId,
+      commitmentFor("4", "salt"),
     );
-    const firstTx = await moduleProgress.write.claimModuleCompletion(
-      [0n, 1n, firstSignature],
-      { account: learner.account },
-    );
-    await publicClient.waitForTransactionReceipt({ hash: firstTx });
+    await registerProof(proof);
 
-    const secondSignature = await signCompletion(
+    await viem.assertions.revertWithCustomError(
+      moduleProgress.write.claimModuleCompletion(
+        [moduleId, proof.a, proof.b, proof.c, proof.input],
+        { account: learner.account },
+      ),
+      moduleProgress,
+      "CommitmentNotSet",
+    );
+  });
+
+  it("prevents double completions", async () => {
+    const commitment = commitmentFor("4", "salt");
+    await moduleProgress.write.setModuleCommitment(
+      [moduleId, commitment],
+      { account: author.account },
+    );
+    const proof = defaultProof(
       learner.account.address,
-      0n,
-      2n,
+      moduleId,
+      commitment,
+    );
+    await registerProof(proof);
+    await moduleProgress.write.claimModuleCompletion(
+      [moduleId, proof.a, proof.b, proof.c, proof.input],
+      { account: learner.account },
     );
 
     await viem.assertions.revertWithCustomError(
-      moduleProgress.write.claimModuleCompletion([0n, 2n, secondSignature], {
-        account: learner.account,
-      }),
+      moduleProgress.write.claimModuleCompletion(
+        [moduleId, proof.a, proof.b, proof.c, proof.input],
+        { account: learner.account },
+      ),
       moduleProgress,
       "AlreadyCompleted",
     );
   });
 
-  it("bubbles ModuleNotFound when claiming non-existent modules", async () => {
-    const signature = await signCompletion(
-      learner.account.address,
-      5n,
-      9n,
-    );
-
+  it("only allows module authors to set commitments", async () => {
+    const commitment = commitmentFor("secret", "salt");
     await viem.assertions.revertWithCustomError(
-      moduleProgress.write.claimModuleCompletion([5n, 9n, signature], {
-        account: learner.account,
+      moduleProgress.write.setModuleCommitment([moduleId, commitment], {
+        account: attacker.account,
       }),
-      moduleRegistry,
-      "ModuleNotFound",
+      moduleProgress,
+      "NotModuleAuthor",
     );
   });
 });
