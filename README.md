@@ -2,8 +2,6 @@
 
 This repo hosts the first smart contracts for Poky, a minimal knowledge protocol where authors publish learning modules and bundle them into curated tracks. The stack uses **Hardhat 3**, the native `node:test` runner, and [`viem`](https://viem.sh/) for all contract interactions.
 
-> **Node requirement:** Hardhat 3 needs Node.js **22.10.0 or newer**. Older runtimes (Node 20) will fail during compilation.
-
 
 ## Contracts
 
