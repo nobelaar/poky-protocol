@@ -2,17 +2,16 @@
 pragma solidity ^0.8.30;
 
 import {IModuleRegistry} from "../interfaces/IModuleRegistry.sol";
-import {IGroth16Verifier} from "../interfaces/IGroth16Verifier.sol";
 import {Types} from "../interfaces/Types.sol";
 
-/// @title ModuleProgress (ZK)
-/// @notice Permissionless tracker that verifies completion proofs via Groth16
+/// @title ModuleProgress (commit-reveal)
+/// @notice Permissionless tracker that validates section commitments via hash preimages
 contract ModuleProgress {
     error CommitmentNotSet(uint256 moduleId, uint256 sectionId);
     error NotModuleAuthor(address caller, uint256 moduleId);
     error SectionAlreadyCompleted(address user, uint256 moduleId, uint256 sectionId);
-    error InvalidProof();
-    error InvalidPublicInputs();
+    error CommitmentMismatch(bytes32 expected, bytes32 provided);
+    error CommitmentAlreadyUsed(uint256 moduleId, uint256 sectionId, bytes32 commitment);
     error SectionLimitReached(uint256 moduleId);
 
     event ModuleCompleted(address indexed user, uint256 indexed moduleId);
@@ -23,8 +22,6 @@ contract ModuleProgress {
     );
 
     IModuleRegistry public immutable moduleRegistry;
-    IGroth16Verifier public immutable verifier;
-
     mapping(uint256 moduleId => uint256 count) public moduleSectionCounts;
     mapping(uint256 moduleId => mapping(uint256 sectionId => bytes32 commitment))
         public sectionCommitments;
@@ -33,12 +30,12 @@ contract ModuleProgress {
     mapping(address user => mapping(uint256 moduleId => uint256 count))
         public completedSectionCount;
     mapping(address user => mapping(uint256 moduleId => bool)) private completedModules;
+    mapping(uint256 moduleId => mapping(uint256 sectionId => mapping(bytes32 commitment => bool used)))
+        private usedCommitments;
 
-    constructor(address moduleRegistryAddress, address verifierAddress) {
+    constructor(address moduleRegistryAddress) {
         require(moduleRegistryAddress != address(0), "invalid registry");
-        require(verifierAddress != address(0), "invalid verifier");
         moduleRegistry = IModuleRegistry(moduleRegistryAddress);
-        verifier = IGroth16Verifier(verifierAddress);
     }
 
     /// @notice Authors publish commitments for each section of their module
@@ -60,14 +57,12 @@ contract ModuleProgress {
         emit SectionCommitmentSet(moduleId, sectionId, commitment);
     }
 
-    /// @notice Records a section completion proof for msg.sender
+    /// @notice Records a section completion for msg.sender by revealing a salted preimage hash
     function claimSectionCompletion(
         uint256 moduleId,
         uint256 sectionId,
-        uint256[2] calldata a,
-        uint256[2][2] calldata b,
-        uint256[2] calldata c,
-        uint256[] calldata input
+        bytes32 providedHash,
+        bytes32 salt
     ) external {
         Types.Module memory moduleData = moduleRegistry.getModule(moduleId);
         uint256 expectedSections = moduleData.sectionCount;
@@ -79,29 +74,21 @@ contract ModuleProgress {
             revert SectionAlreadyCompleted(msg.sender, moduleId, sectionId);
         }
 
-        bytes32 commitment = sectionCommitments[moduleId][sectionId];
-        if (commitment == bytes32(0)) {
+        bytes32 expectedCommitment = sectionCommitments[moduleId][sectionId];
+        if (expectedCommitment == bytes32(0)) {
             revert CommitmentNotSet(moduleId, sectionId);
         }
 
-        if (input.length < 4) {
-            revert InvalidPublicInputs();
+        bytes32 computedCommitment = keccak256(abi.encodePacked(providedHash, salt));
+        if (computedCommitment != expectedCommitment) {
+            revert CommitmentMismatch(expectedCommitment, computedCommitment);
         }
 
-        uint256 expectedUser = uint256(uint160(msg.sender));
-        if (
-            input[0] != expectedUser ||
-            input[1] != moduleId ||
-            input[2] != sectionId ||
-            input[3] != uint256(commitment)
-        ) {
-            revert InvalidPublicInputs();
+        if (usedCommitments[moduleId][sectionId][computedCommitment]) {
+            revert CommitmentAlreadyUsed(moduleId, sectionId, computedCommitment);
         }
 
-        bool verified = verifier.verifyProof(a, b, c, input);
-        if (!verified) {
-            revert InvalidProof();
-        }
+        usedCommitments[moduleId][sectionId][computedCommitment] = true;
 
         completedSections[msg.sender][moduleId][sectionId] = true;
         completedSectionCount[msg.sender][moduleId] += 1;

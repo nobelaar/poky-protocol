@@ -4,66 +4,38 @@ import { beforeEach, describe, it } from "node:test";
 import { network } from "hardhat";
 import { encodePacked, keccak256 } from "viem";
 
-describe("ModuleProgress (ZK)", async () => {
+describe("ModuleProgress (commit-reveal)", async () => {
   const { viem } = await network.connect();
   const publicClient = await viem.getPublicClient();
-  const [author, learner, attacker] = await viem.getWalletClients();
+  const [author, learner, attacker, secondLearner] = await viem.getWalletClients();
 
   const deployModuleRegistry = () => viem.deployContract("ModuleRegistry");
-  const deployVerifier = () => viem.deployContract("MockGroth16Verifier");
-  const deployModuleProgress = (
-    registryAddress: `0x${string}`,
-    verifierAddress: `0x${string}`,
-  ) => viem.deployContract("ModuleProgress", [registryAddress, verifierAddress]);
+  const deployModuleProgress = (registryAddress: `0x${string}`) =>
+    viem.deployContract("ModuleProgress", [registryAddress]);
 
   type ModuleRegistryContract = Awaited<
     ReturnType<typeof deployModuleRegistry>
   >;
-  type MockVerifierContract = Awaited<ReturnType<typeof deployVerifier>>;
   type ModuleProgressContract = Awaited<
     ReturnType<typeof deployModuleProgress>
   >;
 
   let moduleRegistry: ModuleRegistryContract;
-  let verifier: MockVerifierContract;
   let moduleProgress: ModuleProgressContract;
   const moduleId = 0n;
   const sectionCount = 2n;
 
-  const asUint = (address: `0x${string}`) => BigInt(address);
-
-  const commitmentFor = (answer: string, salt: string) =>
-    keccak256(encodePacked(["string", "string"], [answer, salt]));
-
-  const defaultProof = (
-    user: `0x${string}`,
-    moduleIdParam: bigint,
-    sectionId: bigint,
-    commitment: `0x${string}`,
-  ) => {
-    const a: [bigint, bigint] = [1n, 2n];
-    const b: [[bigint, bigint], [bigint, bigint]] = [
-      [3n, 4n],
-      [5n, 6n],
-    ];
-    const c: [bigint, bigint] = [7n, 8n];
-    const input = [
-      asUint(user),
-      moduleIdParam,
-      sectionId,
-      BigInt(commitment),
-    ];
-
-    return { a, b, c, input };
-  };
-
-  const registerProof = async (proof: ReturnType<typeof defaultProof>) => {
-    await verifier.write.setValidProof([
-      proof.a,
-      proof.b,
-      proof.c,
-      proof.input,
-    ]);
+  const saltFor = (input: string) =>
+    keccak256(encodePacked(["string"], [input]));
+  const providedHashFor = (answer: string) =>
+    keccak256(encodePacked(["string"], [answer]));
+  const commitmentFor = (answer: string, saltSeed: string) => {
+    const providedHash = providedHashFor(answer);
+    const salt = saltFor(saltSeed);
+    const commitment = keccak256(
+      encodePacked(["bytes32", "bytes32"], [providedHash, salt]),
+    );
+    return { providedHash, salt, commitment };
   };
 
   beforeEach(async () => {
@@ -79,37 +51,26 @@ describe("ModuleProgress (ZK)", async () => {
       { account: author.account },
     );
 
-    verifier = await deployVerifier();
-    moduleProgress = await deployModuleProgress(
-      moduleRegistry.address,
-      verifier.address,
-    );
+    moduleProgress = await deployModuleProgress(moduleRegistry.address);
   });
 
-  it("records module completion with a valid proof", async () => {
-    const commitment0 = commitmentFor("4", "salt");
-    const commitment1 = commitmentFor("5", "salt");
+  it("records module completion with matching commitment reveals", async () => {
+    const section0 = commitmentFor("4", "salt1");
+    const section1 = commitmentFor("5", "salt2");
     await moduleProgress.write.setSectionCommitment(
-      [moduleId, commitment0],
+      [moduleId, section0.commitment],
       { account: author.account },
     );
     await moduleProgress.write.setSectionCommitment(
-      [moduleId, commitment1],
+      [moduleId, section1.commitment],
       { account: author.account },
     );
 
-    const proof0 = defaultProof(
-      learner.account.address,
-      moduleId,
-      0n,
-      commitment0,
-    );
-    await registerProof(proof0);
-    const txHash0 = await moduleProgress.write.claimSectionCompletion(
-      [moduleId, 0n, proof0.a, proof0.b, proof0.c, proof0.input],
+    const tx0 = await moduleProgress.write.claimSectionCompletion(
+      [moduleId, 0n, section0.providedHash, section0.salt],
       { account: learner.account },
     );
-    await publicClient.waitForTransactionReceipt({ hash: txHash0 });
+    await publicClient.waitForTransactionReceipt({ hash: tx0 });
 
     assert.equal(
       await moduleProgress.read.hasCompletedSection([
@@ -120,18 +81,11 @@ describe("ModuleProgress (ZK)", async () => {
       true,
     );
 
-    const proof1 = defaultProof(
-      learner.account.address,
-      moduleId,
-      1n,
-      commitment1,
-    );
-    await registerProof(proof1);
-    const txHash1 = await moduleProgress.write.claimSectionCompletion(
-      [moduleId, 1n, proof1.a, proof1.b, proof1.c, proof1.input],
+    const tx1 = await moduleProgress.write.claimSectionCompletion(
+      [moduleId, 1n, section1.providedHash, section1.salt],
       { account: learner.account },
     );
-    await publicClient.waitForTransactionReceipt({ hash: txHash1 });
+    await publicClient.waitForTransactionReceipt({ hash: tx1 });
 
     assert.equal(
       await moduleProgress.read.hasCompletedModule([
@@ -142,67 +96,51 @@ describe("ModuleProgress (ZK)", async () => {
     );
   });
 
-  it("rejects proofs if the Groth16 verifier returns false", async () => {
-    const commitment = commitmentFor("4", "salt");
-    await moduleProgress.write.setSectionCommitment(
-      [moduleId, commitment],
-      { account: author.account },
-    );
+  it("rejects mismatched preimages", async () => {
+    const { commitment, salt } = commitmentFor("4", "salt1");
+    await moduleProgress.write.setSectionCommitment([moduleId, commitment], {
+      account: author.account,
+    });
 
-    const proof = defaultProof(
-      learner.account.address,
-      moduleId,
-      0n,
-      commitment,
-    );
-
+    const wrongHash = providedHashFor("wrong");
     await viem.assertions.revertWithCustomError(
       moduleProgress.write.claimSectionCompletion(
-        [moduleId, 0n, proof.a, proof.b, proof.c, proof.input],
+        [moduleId, 0n, wrongHash, salt],
         { account: learner.account },
       ),
       moduleProgress,
-      "InvalidProof",
+      "CommitmentMismatch",
     );
   });
 
-  it("requires matching public inputs for user and module", async () => {
-    const commitment = commitmentFor("4", "salt");
-    await moduleProgress.write.setSectionCommitment(
-      [moduleId, commitment],
-      { account: author.account },
+  it("prevents reusing hash+salt combinations within a section", async () => {
+    const section0 = commitmentFor("4", "salt1");
+    await moduleProgress.write.setSectionCommitment([moduleId, section0.commitment], {
+      account: author.account,
+    });
+
+    const tx = await moduleProgress.write.claimSectionCompletion(
+      [moduleId, 0n, section0.providedHash, section0.salt],
+      { account: learner.account },
     );
-    const proof = defaultProof(
-      learner.account.address,
-      moduleId,
-      0n,
-      commitment,
-    );
-    proof.input[0] = asUint(attacker.account.address);
-    await registerProof(proof);
+    await publicClient.waitForTransactionReceipt({ hash: tx });
 
     await viem.assertions.revertWithCustomError(
       moduleProgress.write.claimSectionCompletion(
-        [moduleId, 0n, proof.a, proof.b, proof.c, proof.input],
-        { account: learner.account },
+        [moduleId, 0n, section0.providedHash, section0.salt],
+        { account: secondLearner.account },
       ),
       moduleProgress,
-      "InvalidPublicInputs",
+      "CommitmentAlreadyUsed",
     );
   });
 
   it("requires module commitments to be published", async () => {
-    const proof = defaultProof(
-      learner.account.address,
-      moduleId,
-      0n,
-      commitmentFor("4", "salt"),
-    );
-    await registerProof(proof);
+    const section0 = commitmentFor("4", "salt1");
 
     await viem.assertions.revertWithCustomError(
       moduleProgress.write.claimSectionCompletion(
-        [moduleId, 0n, proof.a, proof.b, proof.c, proof.input],
+        [moduleId, 0n, section0.providedHash, section0.salt],
         { account: learner.account },
       ),
       moduleProgress,
@@ -211,26 +149,19 @@ describe("ModuleProgress (ZK)", async () => {
   });
 
   it("prevents double completions", async () => {
-    const commitment = commitmentFor("4", "salt");
-    await moduleProgress.write.setSectionCommitment(
-      [moduleId, commitment],
-      { account: author.account },
-    );
-    const proof = defaultProof(
-      learner.account.address,
-      moduleId,
-      0n,
-      commitment,
-    );
-    await registerProof(proof);
-    await moduleProgress.write.claimSectionCompletion(
-      [moduleId, 0n, proof.a, proof.b, proof.c, proof.input],
+    const section0 = commitmentFor("4", "salt1");
+    await moduleProgress.write.setSectionCommitment([moduleId, section0.commitment], {
+      account: author.account,
+    });
+    const tx = await moduleProgress.write.claimSectionCompletion(
+      [moduleId, 0n, section0.providedHash, section0.salt],
       { account: learner.account },
     );
+    await publicClient.waitForTransactionReceipt({ hash: tx });
 
     await viem.assertions.revertWithCustomError(
       moduleProgress.write.claimSectionCompletion(
-        [moduleId, 0n, proof.a, proof.b, proof.c, proof.input],
+        [moduleId, 0n, section0.providedHash, section0.salt],
         { account: learner.account },
       ),
       moduleProgress,
@@ -239,9 +170,9 @@ describe("ModuleProgress (ZK)", async () => {
   });
 
   it("only allows module authors to set commitments", async () => {
-    const commitment = commitmentFor("secret", "salt");
+    const section0 = commitmentFor("secret", "salt");
     await viem.assertions.revertWithCustomError(
-      moduleProgress.write.setSectionCommitment([moduleId, commitment], {
+      moduleProgress.write.setSectionCommitment([moduleId, section0.commitment], {
         account: attacker.account,
       }),
       moduleProgress,
