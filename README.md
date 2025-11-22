@@ -7,6 +7,7 @@ This repo hosts the first smart contracts for Poky, a minimal knowledge protocol
 
 - `contracts/core/ModuleRegistry.sol` stores immutable metadata for learning modules (titles, descriptions, images, IPFS CIDs, authors, timestamps). IDs are the array index and events surface the author/IPFS pair.
 - `contracts/core/TrackRegistry.sol` keeps higher-level learning tracks composed of ordered module IDs. Tracks require at least one module and also store the author + timestamp.
+- `contracts/core/ModuleProgress.sol` lets learners permissionlessly record completed modules using author-signed attestations, emitting `ModuleCompleted` events that future badge mechanics can consume.
 - Structs live in `contracts/interfaces/Types.sol`; external-facing interfaces sit in `contracts/interfaces/IModuleRegistry.sol` and `contracts/interfaces/ITrackRegistry.sol`.
 
 ## Tests 
