@@ -2,6 +2,27 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import { network } from "hardhat";
+import { create as createIpfsClient, type IPFSHTTPClient } from "ipfs-http-client";
+
+type SubsectionInput = {
+  type: "INFO" | "MULTIPLE_SELECTION";
+  content: string;
+  options?: string[];
+};
+
+type SectionInput = {
+  title: string;
+  subsections?: SubsectionInput[];
+};
+
+type NewModuleInput = {
+  title: string;
+  description: string;
+  image: string;
+  ipfsCid?: string;
+  contentMdPath?: string;
+  sections: SectionInput[];
+};
 
 type NewModuleMetadata = {
   title: string;
@@ -14,7 +35,7 @@ type NewModuleMetadata = {
 type TrackInput = {
   title: string;
   moduleIds?: (number | bigint)[];
-  newModules?: NewModuleMetadata[];
+  newModules?: NewModuleInput[];
 };
 
 type Addresses = {
@@ -76,30 +97,153 @@ const normalizeModuleIds = (moduleIds: (number | bigint)[] | undefined) => {
   });
 };
 
-const normalizeNewModules = (newModules: NewModuleMetadata[] | undefined) => {
+const validateSubsections = (
+  subsections: SubsectionInput[] | undefined,
+  moduleIndex: number,
+  sectionIndex: number,
+) => {
+  if (!subsections) return [] as SubsectionInput[];
+
+  return subsections.map((subsection, subsectionIndex) => {
+    if (!subsection.content || typeof subsection.content !== "string") {
+      throw new Error(
+        `newModules[${moduleIndex}].sections[${sectionIndex}].subsections[${subsectionIndex}].content must be a non-empty string`,
+      );
+    }
+
+    if (subsection.type !== "INFO" && subsection.type !== "MULTIPLE_SELECTION") {
+      throw new Error(
+        `newModules[${moduleIndex}].sections[${sectionIndex}].subsections[${subsectionIndex}].type must be INFO or MULTIPLE_SELECTION`,
+      );
+    }
+
+    if (subsection.type === "MULTIPLE_SELECTION") {
+      if (!Array.isArray(subsection.options) || subsection.options.length === 0) {
+        throw new Error(
+          `newModules[${moduleIndex}].sections[${sectionIndex}].subsections[${subsectionIndex}].options must be a non-empty string array for MULTIPLE_SELECTION`,
+        );
+      }
+
+      subsection.options.forEach((option, optionIndex) => {
+        if (typeof option !== "string" || option.trim() === "") {
+          throw new Error(
+            `newModules[${moduleIndex}].sections[${sectionIndex}].subsections[${subsectionIndex}].options[${optionIndex}] must be a non-empty string`,
+          );
+        }
+      });
+    } else if (subsection.options) {
+      throw new Error(
+        `newModules[${moduleIndex}].sections[${sectionIndex}].subsections[${subsectionIndex}].options is only allowed for MULTIPLE_SELECTION subsections`,
+      );
+    }
+
+    return subsection;
+  });
+};
+
+const validateSections = (
+  sections: SectionInput[],
+  moduleIndex: number,
+) => {
+  if (!Array.isArray(sections) || sections.length === 0) {
+    throw new Error(
+      `newModules[${moduleIndex}].sections must be a non-empty array of sections`,
+    );
+  }
+
+  return sections.map((section, sectionIndex) => {
+    if (!section.title || typeof section.title !== "string") {
+      throw new Error(
+        `newModules[${moduleIndex}].sections[${sectionIndex}].title must be a non-empty string`,
+      );
+    }
+
+    return {
+      ...section,
+      subsections: validateSubsections(
+        section.subsections,
+        moduleIndex,
+        sectionIndex,
+      ),
+    };
+  });
+};
+
+const createIpfsClientFromEnv = (): IPFSHTTPClient | undefined => {
+  const ipfsApi = process.env.IPFS_API_URL;
+  if (!ipfsApi) return undefined;
+
+  const authToken = process.env.IPFS_API_TOKEN;
+  const headers = authToken ? { authorization: `Bearer ${authToken}` } : undefined;
+
+  return createIpfsClient({ url: ipfsApi, headers });
+};
+
+const uploadMdToIpfs = async (
+  ipfsClient: IPFSHTTPClient,
+  mdPath: string,
+  moduleIndex: number,
+) => {
+  const resolvedPath = path.resolve(process.cwd(), mdPath);
+  const content = await fs.readFile(resolvedPath);
+
+  const { cid } = await ipfsClient.add(content);
+  const cidString = cid.toString();
+  console.log(
+    `Uploaded Markdown for newModules[${moduleIndex}] to IPFS (${cidString}) from ${resolvedPath}`,
+  );
+  return cidString;
+};
+
+const normalizeNewModules = async (
+  newModules: NewModuleInput[] | undefined,
+  ipfsClient: IPFSHTTPClient | undefined,
+) => {
   if (!newModules) return [] as NewModuleMetadata[];
 
-  return newModules.map((module, index) => {
-    for (const key of [
-      "title",
-      "description",
-      "image",
-      "ipfsCid",
-      "sectionCount",
-    ] as const) {
+  const results: NewModuleMetadata[] = [];
+  for (const [index, module] of newModules.entries()) {
+    for (const key of ["title", "description", "image", "sections"] as const) {
       if ((module as any)[key] === undefined) {
         throw new Error(`newModules[${index}] is missing ${key}`);
       }
     }
 
-    if (!Number.isInteger(module.sectionCount) || module.sectionCount <= 0) {
+    const validatedSections = validateSections(module.sections, index);
+    const sectionCount = validatedSections.length;
+    if (!Number.isInteger(sectionCount) || sectionCount <= 0) {
       throw new Error(
-        `newModules[${index}].sectionCount must be a positive integer.`,
+        `newModules[${index}].sections must contain at least one section to derive sectionCount`,
       );
     }
 
-    return module;
-  });
+    let ipfsCid = module.ipfsCid;
+    if (!ipfsCid && module.contentMdPath) {
+      if (!ipfsClient) {
+        throw new Error(
+          `IPFS upload requested for newModules[${index}] but IPFS_API_URL is not set`,
+        );
+      }
+
+      ipfsCid = await uploadMdToIpfs(ipfsClient, module.contentMdPath, index);
+    }
+
+    if (!ipfsCid) {
+      throw new Error(
+        `newModules[${index}] requires an ipfsCid or a contentMdPath + IPFS_API_URL to upload content`,
+      );
+    }
+
+    results.push({
+      title: module.title,
+      description: module.description,
+      image: module.image,
+      ipfsCid,
+      sectionCount,
+    });
+  }
+
+  return results;
 };
 
 const logDivider = () => console.log("-----------------------------");
@@ -111,7 +255,8 @@ const main = async () => {
 
   const input = await readTrackFile();
   const moduleIds = normalizeModuleIds(input.moduleIds);
-  const newModules = normalizeNewModules(input.newModules);
+  const ipfsClient = createIpfsClientFromEnv();
+  const newModules = await normalizeNewModules(input.newModules, ipfsClient);
   const addresses = loadAddresses();
 
   console.log("Network:", network.name);

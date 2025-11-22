@@ -66,7 +66,7 @@ The scripts log the deployer account, target block, and initial totals so you ca
 
 Create modules that are missing and then register the track in one go by feeding a JSON file to `scripts/create-track.ts`.
 
-Example payload (`track.json`):
+Example payload (`track.json`) with sections/subsections. The script derives `sectionCount = sections.length` and sends only that value on-chain. You can provide `ipfsCid` directly or set `IPFS_API_URL` (+ optional `IPFS_API_TOKEN`) so `contentMdPath` uploads the Markdown blob to IPFS automatically:
 
 ```json
 {
@@ -77,8 +77,24 @@ Example payload (`track.json`):
       "title": "ZK 101",
       "description": "Intro to zero-knowledge proofs",
       "image": "ipfs://zk.png",
-      "ipfsCid": "bafy-123",
-      "sectionCount": 3
+      "contentMdPath": "content/zk-101.md",
+      "sections": [
+        {
+          "title": "Bienvenida",
+          "subsections": [
+            { "type": "INFO", "content": "¿Qué es un zkSNARK?" },
+            {
+              "type": "MULTIPLE_SELECTION",
+              "content": "Selecciona las afirmaciones correctas",
+              "options": [
+                "Prueban conocimiento sin revelar secretos",
+                "Requieren que el verificador revele su clave privada"
+              ]
+            }
+          ]
+        },
+        { "title": "Demo guiada", "subsections": [] }
+      ]
     }
   ]
 }
@@ -97,12 +113,12 @@ The script validates existing module IDs, creates any additional modules from th
 
 ### Token basics example track (Spanish)
 
-For a longer example focused on ERC-20/721 fundamentals—including introductory info plus multiple-selection quizzes—you can use `examples/token-basics-track.json` as the input file. It defines four modules:
+For a longer example focused on ERC-20/721 fundamentals—including introductory info plus multiple-selection quizzes—you can use `examples/token-basics-track.json` as the input file. It now ships with sections/subsections for every module, ready for the script to derive `sectionCount` automatically:
 
-1. **Bienvenida y setup de billetera** – onboarding and glossary before starting.
+1. **Bienvenida y setup de billetera** – onboarding, safety reminders, and a quick install checklist.
 2. **Fungibles vs no fungibles** – compares ERC-20 vs ERC-721/1155 with classification quizzes.
 3. **Transferencias, approvals y gas** – covers allowances, transfer flows, and safe-sending checks.
-4. **Buenas prácticas y riesgos** – security checklist with scenario-based questions.
+4. **Buenas prácticas y riesgos** – security checklist with scenarios to spot phishing or excessive permissions.
 
 Run it the same way as any JSON payload:
 

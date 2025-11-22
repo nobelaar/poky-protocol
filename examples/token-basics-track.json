@@ -7,28 +7,165 @@
       "description": "Resumen de qué es un token, por qué existen, enlaces a glosario y una guía rápida para instalar/configurar una billetera antes de practicar.",
       "image": "ipfs://placeholder/wallet-intro.png",
       "ipfsCid": "bafy-token-welcome",
-      "sectionCount": 3
+      "sections": [
+        {
+          "title": "Contexto y objetivos",
+          "subsections": [
+            {
+              "type": "INFO",
+              "content": "Qué resolverán los tokens en esta ruta y qué recibirás al completar cada módulo."
+            }
+          ]
+        },
+        {
+          "title": "Instalación y respaldo",
+          "subsections": [
+            {
+              "type": "INFO",
+              "content": "Guía rápida para instalar la billetera, crear una cuenta y guardar la frase semilla."
+            },
+            {
+              "type": "MULTIPLE_SELECTION",
+              "content": "Selecciona las buenas prácticas de seguridad al crear tu billetera",
+              "options": [
+                "Guardar la semilla en un gestor seguro y offline",
+                "Compartir la semilla con un amigo para no perderla",
+                "Probar la frase en un sitio oficial para verificarla"
+              ]
+            }
+          ]
+        }
+      ]
     },
     {
       "title": "Fungibles vs no fungibles",
       "description": "Diferencias clave entre ERC-20 y ERC-721/1155, supply, divisibilidad y casos de uso. Incluye preguntas de selección múltiple para clasificar ejemplos.",
       "image": "ipfs://placeholder/token-types.png",
       "ipfsCid": "bafy-token-types",
-      "sectionCount": 4
+      "sections": [
+        {
+          "title": "Propiedades esenciales",
+          "subsections": [
+            {
+              "type": "INFO",
+              "content": "Supply fijo vs variable, divisibilidad y unicidad de los tokens no fungibles."
+            },
+            {
+              "type": "MULTIPLE_SELECTION",
+              "content": "Identifica cuáles de estos activos son fungibles",
+              "options": [
+                "ETH", "Entradas numeradas a un concierto", "Stablecoins"
+              ]
+            }
+          ]
+        },
+        {
+          "title": "Casos de uso",
+          "subsections": [
+            {
+              "type": "INFO",
+              "content": "Qué productos se benefician de ERC-20 (governance, utility) y cuáles de NFTs (identidad, coleccionables)."
+            },
+            {
+              "type": "MULTIPLE_SELECTION",
+              "content": "Elige ejemplos adecuados para NFTs",
+              "options": [
+                "Avatares con atributos únicos",
+                "Puntos de fidelidad transferibles",
+                "Certificados de asistencia"
+              ]
+            }
+          ]
+        }
+      ]
     },
     {
       "title": "Transferencias, approvals y gas",
       "description": "Cómo funcionan transferencias directas, allowances (approve/transferFrom), límites de gasto y gas. Ejercicios de selección múltiple sobre rutas seguras de envío.",
       "image": "ipfs://placeholder/transfers.png",
       "ipfsCid": "bafy-token-transfers",
-      "sectionCount": 4
+      "sections": [
+        {
+          "title": "Rutas de envío",
+          "subsections": [
+            {
+              "type": "INFO",
+              "content": "Cuándo usar transfer vs transferFrom y qué riesgos mitigar (spenders ilimitados, phishing)."
+            },
+            {
+              "type": "MULTIPLE_SELECTION",
+              "content": "Selecciona prácticas seguras antes de aprobar gasto",
+              "options": [
+                "Verificar el spender en el contrato correcto",
+                "Otorgar allowance ilimitado siempre para evitar fallos",
+                "Revocar approvals después de usar la dApp"
+              ]
+            }
+          ]
+        },
+        {
+          "title": "Costos y gas",
+          "subsections": [
+            {
+              "type": "INFO",
+              "content": "Cómo se calcula el gas y por qué transferir NFTs consume más que tokens fungibles en algunos casos."
+            },
+            {
+              "type": "MULTIPLE_SELECTION",
+              "content": "Elige factores que impactan el gas pagado",
+              "options": [
+                "Complejidad de la función llamada",
+                "Precio del bloque/gwei",
+                "Cantidad de tokens en tu billetera"
+              ]
+            }
+          ]
+        }
+      ]
     },
     {
       "title": "Buenas prácticas y riesgos",
       "description": "Checklist de seguridad: phishing, revocar approvals, contratos proxy y cómo validar direcciones/tokenomics antes de interactuar. Incluye quiz final con escenarios.",
       "image": "ipfs://placeholder/security.png",
       "ipfsCid": "bafy-token-security",
-      "sectionCount": 3
+      "sections": [
+        {
+          "title": "Validaciones previas",
+          "subsections": [
+            {
+              "type": "INFO",
+              "content": "Pasos para validar contratos (dirección, bytecode, proxy) y revisar el historial del deployer."
+            },
+            {
+              "type": "MULTIPLE_SELECTION",
+              "content": "Selecciona validaciones clave antes de firmar",
+              "options": [
+                "Revisar la dirección en un explorador oficial",
+                "Firmar mensajes de origen desconocido para probar",
+                "Confirmar que el contrato no es un proxy no auditado"
+              ]
+            }
+          ]
+        },
+        {
+          "title": "Escenarios de riesgo",
+          "subsections": [
+            {
+              "type": "INFO",
+              "content": "Patrones comunes de phishing, permisos excesivos y enlaces maliciosos en dApps."
+            },
+            {
+              "type": "MULTIPLE_SELECTION",
+              "content": "Elige qué acciones reducen el riesgo en dApps nuevas",
+              "options": [
+                "Usar una billetera de prueba antes de la principal",
+                "Aceptar solicitudes de firma en blanco si vienen de una marca conocida",
+                "Configurar límites de gasto bajos y revocarlos luego"
+              ]
+            }
+          ]
+        }
+      ]
     }
   ]
 }
