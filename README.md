@@ -126,11 +126,32 @@ For a longer example focused on ERC-20/721 fundamentals—including introductory
 Run it the same way as any JSON payload:
 
 ```bash
-npx hardhat run scripts/create-track.ts --network <networkName> \
-  --input examples/token-basics-track.json \
-  --moduleRegistry <moduleRegistryAddress> \
-  --trackRegistry <trackRegistryAddress>
+  npx hardhat run scripts/create-track.ts --network <networkName> \
+    --input examples/token-basics-track.json \
+    --moduleRegistry <moduleRegistryAddress> \
+    --trackRegistry <trackRegistryAddress>
+  ```
+
+### End-to-end stablecoins demo
+
+`scripts/end-to-end-stablecoins.ts` automates a full flow for the Spanish stablecoins curriculum: it deploys (or reuses) the registries and verifier, creates the stablecoins track via `scripts/create-track.ts`, publishes section commitments, submits matching proofs with the `MockVerifier`, and mints the corresponding badges for a learner account.
+
+Run it with any configured network (Hardhat L1: `hardhatMainnet`, OP-style sim: `hardhatOp`, or `sepolia`). You can also reuse existing deployments via flags:
+
+```bash
+npx hardhat run scripts/end-to-end-stablecoins.ts --network <networkName> \
+  --moduleRegistry <optionalAddress> \
+  --trackRegistry <optionalAddress> \
+  --verifier <optionalAddress>
 ```
+
+Environment variables consumed by the script:
+
+- Network access: `SEPOLIA_RPC_URL` + `SEPOLIA_PRIVATE_KEY` (or the equivalents for any configured network in `hardhat.config.ts`).
+- IPFS (optional, only if you want `create-track.ts` to upload Markdown for new modules): `IPFS_API_URL` and `IPFS_API_TOKEN`.
+- Stablecoins metadata overrides (optional; the script falls back to defaults): `STABLECOINS_TRACK_TITLE`, `STABLECOINS_MODULE_TITLE`, `STABLECOINS_MODULE_DESCRIPTION`, `STABLECOINS_MODULE_IMAGE`, `STABLECOINS_MODULE_IPFS_CID`.
+
+The script logs every deployment, transaction hash, and badge token id so you can verify module/track creation plus completion proofs end-to-end.
 
 ### Answer commitments in example tracks
 
