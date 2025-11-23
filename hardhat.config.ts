@@ -40,5 +40,12 @@ export default defineConfig({
       url: "http://localhost:8545",
       accounts: [configVariable("LOCAL_PRIVATE_KEY")],
     },
+    zircuit: {
+      type: "http",
+      chainType: "l1",
+      url: configVariable("ZIRCUIT_RPC_URL"),
+      accounts: [configVariable("ZIRCUIT_PRIVATE_KEY")],
+      chainId: 48899,
+    },
   },
 });

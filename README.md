@@ -148,6 +148,15 @@ expecting clear-text solutions.
 
 - Hardhat config (`hardhat.config.ts`) enables the Hardhat 3 + viem toolbox and ships with profiles for the default local chain, an OP-style simulation (`hardhatOp`), and Sepolia.
 - For Sepolia deployments, set `SEPOLIA_RPC_URL` and `SEPOLIA_PRIVATE_KEY` via environment variables or `npx hardhat keystore set`.
+- To target Zircuit, configure `ZIRCUIT_RPC_URL` and `ZIRCUIT_PRIVATE_KEY` (environment variables or `npx hardhat keystore set`). Then run scripts with `--network zircuit`, for example:
+
+  ```bash
+  npx hardhat run scripts/deploy.ts --network zircuit
+  npx hardhat run scripts/create-track.ts --network zircuit \
+    --input examples/token-basics-track.json \
+    --moduleRegistry <moduleRegistryAddress> \
+    --trackRegistry <trackRegistryAddress>
+  ```
 
 ## Roadmap
 
