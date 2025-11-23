@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 
 import { network } from "hardhat";
 import { create as createIpfsClient, type IPFSHTTPClient } from "ipfs-http-client";
@@ -460,7 +461,15 @@ const main = async () => {
     finalModuleIds.map((id) => id.toString()).join(", "));
 };
 
-main().catch((error) => {
-  console.error("Script failed:", error);
-  process.exitCode = 1;
-});
+export const runCreateTrack = main;
+
+const isCliRun =
+  process.argv[1] &&
+  import.meta.url === pathToFileURL(process.argv[1]).href;
+
+if (isCliRun) {
+  main().catch((error) => {
+    console.error("Script failed:", error);
+    process.exitCode = 1;
+  });
+}

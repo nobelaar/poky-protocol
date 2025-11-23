@@ -11,6 +11,7 @@ type StablecoinsTrack = {
   moduleDescription?: string;
   moduleImage?: string;
   moduleIpfsCid?: string;
+  answerSalt?: string;
   sections: Array<{
     title: string;
     description?: string;
@@ -39,6 +40,9 @@ const getFlag = (flag: string) => {
   return process.argv[index + 1];
 };
 
+const resolveInputPath = () =>
+  getFlag("--input") ?? getFlag("-i") ?? "examples/stablecoins-track.json";
+
 const normalizeAddress = (label: string, value: string | undefined) => {
   if (!value) return undefined;
   if (!isAddress(value)) {
@@ -53,7 +57,7 @@ const deployOrReuse = async (
   deployer: Awaited<ReturnType<Awaited<ReturnType<typeof network.connect>>["viem"]["getWalletClients"]>>[number],
   contractName: "ModuleRegistry" | "TrackRegistry" | "MockVerifier" | "ModuleProgress" | "LearningBadges",
   args: ReadonlyArray<any> = [],
-) => {
+): Promise<any> => {
   if (flagValue) {
     console.log(`${contractName} provided:`, flagValue);
     return viem.getContractAt(contractName, flagValue);
@@ -63,9 +67,17 @@ const deployOrReuse = async (
   return viem.deployContract(contractName, args);
 };
 
-const loadStablecoinsData = async () => {
-  const raw = await fs.readFile("examples/stablecoins-track.json", "utf8");
-  return JSON.parse(raw) as StablecoinsTrack;
+const loadStablecoinsData = async (inputPath: string) => {
+  const resolvedPath = path.resolve(process.cwd(), inputPath);
+
+  try {
+    const raw = await fs.readFile(resolvedPath, "utf8");
+    return JSON.parse(raw) as StablecoinsTrack;
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "unknown error reading file";
+    throw new Error(`Failed to load stablecoins input from ${resolvedPath}: ${message}`);
+  }
 };
 
 const buildTrackPayload = async (stablecoins: StablecoinsTrack) => {
@@ -124,8 +136,26 @@ const runCreateTrack = async (
   trackRegistry: Address,
 ) => {
   const originalArgv = [...process.argv];
+  const forwardedArgs: string[] = [];
+  const skipWithValue = new Set([
+    "--input",
+    "-i",
+    "--moduleRegistry",
+    "--trackRegistry",
+  ]);
+
+  for (let i = 0; i < originalArgv.length; i += 1) {
+    const arg = originalArgv[i];
+    if (skipWithValue.has(arg)) {
+      i += 1;
+      continue;
+    }
+
+    forwardedArgs.push(arg);
+  }
+
   process.argv = [
-    ...originalArgv,
+    ...forwardedArgs,
     "--input",
     inputPath,
     "--moduleRegistry",
@@ -134,8 +164,17 @@ const runCreateTrack = async (
     trackRegistry,
   ];
 
-  await import("./create-track");
-  process.argv = originalArgv;
+  try {
+    const module = await import("./create-track.js");
+    const run = module.runCreateTrack as (() => Promise<void>) | undefined;
+    if (!run) {
+      throw new Error("create-track entrypoint not found");
+    }
+
+    await run();
+  } finally {
+    process.argv = originalArgv;
+  }
 };
 
 const publishCommitmentsAndProofs = async (
@@ -201,11 +240,20 @@ const main = async () => {
   const connection = await network.connect();
   const { viem } = connection;
   const publicClient = await viem.getPublicClient();
-  const [deployer, learner] = await viem.getWalletClients();
+  const wallets = await viem.getWalletClients();
+  if (wallets.length === 0) {
+    throw new Error("No wallets available for the selected network");
+  }
+
+  const [deployer, learnerWallet] = wallets;
+  const learner = learnerWallet ?? deployer;
 
   console.log("Network:", connection.networkName);
   console.log("Deployer:", deployer.account.address);
   console.log("Learner:", learner.account.address);
+  if (!learnerWallet) {
+    console.log("(Only one wallet found, reusing deployer for learner actions)");
+  }
   console.log("---------------------------------------");
 
   const moduleRegistry = await deployOrReuse(
@@ -253,7 +301,7 @@ const main = async () => {
   console.log("Deployments:", deployments);
   console.log("---------------------------------------");
 
-  const stablecoins = await loadStablecoinsData();
+  const stablecoins = await loadStablecoinsData(resolveInputPath());
   const trackPayload = await buildTrackPayload(stablecoins);
   const tempPath = await writeTempTrack(trackPayload);
 
