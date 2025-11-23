@@ -1,0 +1,123 @@
+{
+  "sections": [
+    {
+      "title": "Introducción a las stablecoins",
+      "description": "Conceptos clave, motivaciones y terminología básica.",
+      "subsections": [
+        {
+          "title": "¿Qué es una stablecoin?",
+          "type": "INFO",
+          "content": "# Definición\\n\\nUna stablecoin es un token cuyo valor busca seguir una referencia (ej. USD, EUR, oro).\\n\\n**Casos de uso**:\\n- Pagos y remesas con baja volatilidad.\\n- On/off ramps y tesorerías en cripto.\\n- Colateral estable en DeFi.\\n- Cobertura temporal contra caídas de mercado."
+        },
+        {
+          "title": "Tipos de peg y modelos comunes",
+          "type": "INFO",
+          "content": "### Pegs\\n- 1:1 contra moneda fiat (USD, EUR).\\n- Pegs alternos: oro, cestas de monedas, CPI.\\n\\n### Modelos\\n- **Fiat-backed** (USDC, USDT): reservas en cash/T-Bills.\\n- **Cripto-colateralizadas** (DAI, LUSD): sobrecolateral con activos on-chain.\\n- **Algorítmicas/híbridas** (FRAX, UXD): usan mecanismos de mercado y, a veces, colateral parcial.\\n- **Commodity-backed** (PAXG): respaldo en oro u otros bienes."
+        },
+        {
+          "title": "Chequeo rápido",
+          "type": "SIMPLE_SELECTION",
+          "content": "¿Qué característica define a una stablecoin?\\n\\nA) Se espera que mantenga un valor estable frente a una unidad de referencia.\\nB) Siempre ofrece APY altos.\\nC) No depende de oráculos.\\nD) Solo existe en blockchains públicas.",
+          "options": [
+            "Mantener un valor estable frente a una unidad de referencia.",
+            "Ofrecer APY altos.",
+            "No depender de oráculos.",
+            "Existir solo en blockchains públicas."
+          ],
+          "answer": 0
+        }
+      ]
+    },
+    {
+      "title": "Mecánicas de estabilidad",
+      "description": "Cómo se mantiene el peg: colateral, acuñación y redención.",
+      "subsections": [
+        {
+          "title": "Colateralización y ratios",
+          "type": "INFO",
+          "content": "## Colateral\\n- **Sobrecolateralización** (DAI 150%+): protege contra caídas del colateral.\\n- **Colateral mixto** (Frax, USDD): combina cripto + fiat/bonos.\\n- **Respaldadas en reservas fiat** (USDC, USDT): cuentas bancarias y T-Bills.\\n\\n### Ratios\\n- `TVL colateral / stablecoins en circulación` indica salud.\\n- Umbrales de liquidación protegen el peg cuando el colateral baja."
+        },
+        {
+          "title": "Acuñación y redención",
+          "type": "INFO",
+          "content": "1. El usuario deposita colateral.\\n2. El protocolo verifica LTV y acuña.\\n3. Para redimir, devuelve stable + fee y retira colateral.\\n\\nAlgorítmicas: acuñan/queman según `precio < > peg` (se quema token volátil para acuñar estable cuando está bajo peg, y viceversa)."
+        },
+        {
+          "title": "Gobernanza y oráculos",
+          "type": "INFO",
+          "content": "- Oráculos (Chainlink, Pyth) alimentan precio del colateral.\\n- Gobernanza ajusta fees, ratios, activos permitidos, límites de acuñación.\\n- Riesgo: latencia o manipulación de oráculos => liquidaciones incorrectas."
+        },
+        {
+          "title": "Detección de riesgo",
+          "type": "MULTIPLE_SELECTION",
+          "content": "Selecciona señales de riesgo de depeg:",
+          "options": [
+            "Descuento en pools de liquidez (ej. Curve) vs 1 USD.",
+            "Reducción de reservas auditadas o atestados atrasados.",
+            "Aumento de la tasa de redención o retiros masivos.",
+            "Mayor spread en CEX/DEX entre pares USD.",
+            "TVL de colateral subiendo más rápido que la circulación."
+          ],
+          "answers": [0, 1, 2, 3]
+        }
+      ]
+    },
+    {
+      "title": "Casos de uso y composición DeFi",
+      "description": "Dónde se usan y cómo interactúan con otros protocolos.",
+      "subsections": [
+        {
+          "title": "Pagos y remesas",
+          "type": "INFO",
+          "content": "- Remesas cross-border con costos bajos y liquidación rápida.\\n- On/off ramps: UX simple, custodia en hot/cold wallets.\\n- Comercio electrónico: reduce volatilidad en tesorerías crypto."
+        },
+        {
+          "title": "Lending y yield",
+          "type": "INFO",
+          "content": "- Depositar stablecoins en money markets (Aave, Compound) genera interés.\\n- Estrategias de farming: proveer liquidez en AMMs, staking de LP tokens.\\n- Riesgos: tasas variables, impermanent loss si se usa con pares volátiles."
+        },
+        {
+          "title": "Elección de stablecoin",
+          "type": "SIMPLE_SELECTION",
+          "content": "Necesitas colateral estable para un préstamo a 6 meses. ¿Cuál eliges primero?",
+          "options": [
+            "Una stablecoin sobrecolateralizada con oráculos robustos.",
+            "Un token de gobernanza volátil.",
+            "Un meme coin con supply inflacionario.",
+            "Un wrapped BTC."
+          ],
+          "answer": 0
+        }
+      ]
+    },
+    {
+      "title": "Regulación, transparencia y auditoría",
+      "description": "Aspectos legales y de confianza.",
+      "subsections": [
+        {
+          "title": "Cumplimiento y KYC/AML",
+          "type": "INFO",
+          "content": "- Issuers centralizados requieren KYC/AML y pueden tener listas negras.\\n- Riesgo de censura en direcciones sancionadas.\\n- Jurisdicción: licencias de money transmitter, e-money o marcos específicos de stablecoins según país."
+        },
+        {
+          "title": "Pruebas de reservas",
+          "type": "INFO",
+          "content": "- **Attestations** periódicos por auditores (USDC, USDT) vs **proof-of-reserves on-chain**.\\n- Métricas: composición (cash, T-Bills, cripto), madurez de bonos, contrapartes bancarias."
+        },
+        {
+          "title": "Checklist rápida",
+          "type": "MULTIPLE_SELECTION",
+          "content": "Marca buenas prácticas para evaluar una stablecoin:",
+          "options": [
+            "Auditorías o attestations frecuentes y públicas.",
+            "Mecanismos claros de acuñación/redención.",
+            "Dependencia de un único banco sin disclosures.",
+            "Diversificación de colateral y límites por activo.",
+            "Oráculos con fallback y delays configurables."
+          ],
+          "answers": [0, 1, 3, 4]
+        }
+      ]
+    }
+  ]
+}
