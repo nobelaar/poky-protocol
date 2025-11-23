@@ -3,12 +3,22 @@ import path from "node:path";
 
 import { network } from "hardhat";
 import { create as createIpfsClient, type IPFSHTTPClient } from "ipfs-http-client";
-import { isAddress, type Address } from "viem";
+import {
+  encodePacked,
+  keccak256,
+  isAddress,
+  type Address,
+} from "viem";
+
+type SubsectionType = "INFO" | "SIMPLE_SELECTION" | "MULTIPLE_SELECTION";
 
 type SubsectionInput = {
-  type: "INFO" | "MULTIPLE_SELECTION";
+  title?: string;
+  type: SubsectionType;
   content: string;
   options?: string[];
+  answerHash?: string;
+  answersHash?: string;
 };
 
 type SectionInput = {
@@ -108,6 +118,74 @@ const normalizeModuleIds = (moduleIds: (number | bigint)[] | undefined) => {
   });
 };
 
+const HASH_REGEX = /^0x[0-9a-fA-F]{64}$/;
+
+const computeAnswersHash = (answers: number | number[], salt: string) => {
+  const answersArray = Array.isArray(answers) ? answers : [answers];
+  if (
+    !Array.isArray(answersArray) ||
+    answersArray.length === 0 ||
+    answersArray.some(
+      (value) =>
+        !Number.isInteger(value) || Number.isNaN(value) || value < 0 || !Number.isSafeInteger(value),
+    )
+  ) {
+    throw new Error("answers must be a non-empty array of non-negative integers");
+  }
+
+  if (typeof salt !== "string" || salt.trim() === "") {
+    throw new Error("salt must be a non-empty string to derive an answers hash");
+  }
+
+  const normalizedAnswers = answersArray.map((value) => BigInt(value));
+
+  return keccak256(
+    encodePacked(["uint256[]", "string"], [normalizedAnswers, salt]),
+  );
+};
+
+export { computeAnswersHash };
+
+const ensureHash = (value: string | undefined, path: string) => {
+  if (!value || typeof value !== "string" || !HASH_REGEX.test(value)) {
+    throw new Error(`${path} must be a 0x-prefixed 32-byte hex hash`);
+  }
+};
+
+const ensureOptions = (
+  subsection: SubsectionInput,
+  moduleIndex: number,
+  sectionIndex: number,
+  subsectionIndex: number,
+) => {
+  if (!Array.isArray(subsection.options) || subsection.options.length === 0) {
+    throw new Error(
+      `newModules[${moduleIndex}].sections[${sectionIndex}].subsections[${subsectionIndex}].options must be a non-empty string array for ${subsection.type}`,
+    );
+  }
+
+  subsection.options.forEach((option, optionIndex) => {
+    if (typeof option !== "string" || option.trim() === "") {
+      throw new Error(
+        `newModules[${moduleIndex}].sections[${sectionIndex}].subsections[${subsectionIndex}].options[${optionIndex}] must be a non-empty string`,
+      );
+    }
+  });
+};
+
+const assertNoPlainAnswers = (
+  subsection: SubsectionInput,
+  moduleIndex: number,
+  sectionIndex: number,
+  subsectionIndex: number,
+) => {
+  if ("answer" in subsection || "answers" in subsection) {
+    throw new Error(
+      `newModules[${moduleIndex}].sections[${sectionIndex}].subsections[${subsectionIndex}] contains plaintext answers. Provide answerHash/answersHash instead (derive them with computeAnswersHash([...], "<salt>") and remove the plaintext fields).`,
+    );
+  }
+};
+
 const validateSubsections = (
   subsections: SubsectionInput[] | undefined,
   moduleIndex: number,
@@ -122,29 +200,47 @@ const validateSubsections = (
       );
     }
 
-    if (subsection.type !== "INFO" && subsection.type !== "MULTIPLE_SELECTION") {
+    assertNoPlainAnswers(subsection, moduleIndex, sectionIndex, subsectionIndex);
+
+    if (
+      subsection.type !== "INFO" &&
+      subsection.type !== "SIMPLE_SELECTION" &&
+      subsection.type !== "MULTIPLE_SELECTION"
+    ) {
       throw new Error(
-        `newModules[${moduleIndex}].sections[${sectionIndex}].subsections[${subsectionIndex}].type must be INFO or MULTIPLE_SELECTION`,
+        `newModules[${moduleIndex}].sections[${sectionIndex}].subsections[${subsectionIndex}].type must be INFO, SIMPLE_SELECTION or MULTIPLE_SELECTION`,
       );
     }
 
-    if (subsection.type === "MULTIPLE_SELECTION") {
-      if (!Array.isArray(subsection.options) || subsection.options.length === 0) {
-        throw new Error(
-          `newModules[${moduleIndex}].sections[${sectionIndex}].subsections[${subsectionIndex}].options must be a non-empty string array for MULTIPLE_SELECTION`,
-        );
-      }
-
-      subsection.options.forEach((option, optionIndex) => {
-        if (typeof option !== "string" || option.trim() === "") {
+    if (
+      subsection.type === "MULTIPLE_SELECTION" ||
+      subsection.type === "SIMPLE_SELECTION"
+    ) {
+      ensureOptions(subsection, moduleIndex, sectionIndex, subsectionIndex);
+      if (subsection.type === "SIMPLE_SELECTION") {
+        if (subsection.answersHash) {
           throw new Error(
-            `newModules[${moduleIndex}].sections[${sectionIndex}].subsections[${subsectionIndex}].options[${optionIndex}] must be a non-empty string`,
+            `newModules[${moduleIndex}].sections[${sectionIndex}].subsections[${subsectionIndex}].answersHash is not valid for SIMPLE_SELECTION. Use answerHash instead.`,
           );
         }
-      });
+        ensureHash(
+          subsection.answerHash,
+          `newModules[${moduleIndex}].sections[${sectionIndex}].subsections[${subsectionIndex}].answerHash`,
+        );
+      } else {
+        if (subsection.answerHash) {
+          throw new Error(
+            `newModules[${moduleIndex}].sections[${sectionIndex}].subsections[${subsectionIndex}].answerHash is not valid for MULTIPLE_SELECTION. Use answersHash instead.`,
+          );
+        }
+        ensureHash(
+          subsection.answersHash,
+          `newModules[${moduleIndex}].sections[${sectionIndex}].subsections[${subsectionIndex}].answersHash`,
+        );
+      }
     } else if (subsection.options) {
       throw new Error(
-        `newModules[${moduleIndex}].sections[${sectionIndex}].subsections[${subsectionIndex}].options is only allowed for MULTIPLE_SELECTION subsections`,
+        `newModules[${moduleIndex}].sections[${sectionIndex}].subsections[${subsectionIndex}].options is only allowed for SIMPLE_SELECTION or MULTIPLE_SELECTION subsections`,
       );
     }
 

@@ -25,7 +25,7 @@
             "No depender de oráculos.",
             "Existir solo en blockchains públicas."
           ],
-          "answerHash": "0x7e48bb08b0f7908debab2598ac7040b37e571cc48a0c08ed56c9ce5a9954ea09"
+          "answerHash": "0x5fa4af91773a6aaf48f32c93c4241ed3426eec544c90037f439b191bedba1c46"
         }
       ]
     },
@@ -59,7 +59,7 @@
             "Mayor spread en CEX/DEX entre pares USD.",
             "TVL de colateral subiendo más rápido que la circulación."
           ],
-          "answersHash": "0x17d85c61852d59e6c0acd79be259088b821106f4adfa95a8e3fa1d12b1f58456"
+          "answersHash": "0x1361db9fe2498509b8a4e4266cecf0f04bd4a29d4740866e94fad124e499693d"
         }
       ]
     },
@@ -87,7 +87,7 @@
             "Un meme coin con supply inflacionario.",
             "Un wrapped BTC."
           ],
-          "answerHash": "0xf14fcaea88c59c2dca46bb4c0fba47e276155209b3c96be3f74d3d40466f5dcc"
+          "answerHash": "0xd915708ddd1a03eb418dd622cca1d6ba2ec41370058132cbc2628a6863e17530"
         }
       ]
     },
@@ -116,7 +116,7 @@
             "Diversificación de colateral y límites por activo.",
             "Oráculos con fallback y delays configurables."
           ],
-          "answersHash": "0x24a07eed5b0e9ab3fda368bc831f3551a8d344c443a04101f56bc7aea507fff4"
+          "answersHash": "0x1683ed41fe6b3549760b7b0af30789dc6e58b966431ea56ddafaa00c53f0e04e"
         }
       ]
     }

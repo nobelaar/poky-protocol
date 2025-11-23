@@ -31,7 +31,8 @@
                 "Guardar la semilla en un gestor seguro y offline",
                 "Compartir la semilla con un amigo para no perderla",
                 "Probar la frase en un sitio oficial para verificarla"
-              ]
+              ],
+              "answersHash": "0x8d4b783f87c77926a5798d071c3b599194d9334dcd948f25d98ab3f1b39a34b2"
             }
           ]
         }
@@ -55,7 +56,8 @@
               "content": "Identifica cuáles de estos activos son fungibles",
               "options": [
                 "ETH", "Entradas numeradas a un concierto", "Stablecoins"
-              ]
+              ],
+              "answersHash": "0x29c5d3c9d861e0f44bb8efffc37142b4b181e61b6b0a157428e76f716b2a97d4"
             }
           ]
         },
@@ -73,7 +75,8 @@
                 "Avatares con atributos únicos",
                 "Puntos de fidelidad transferibles",
                 "Certificados de asistencia"
-              ]
+              ],
+              "answersHash": "0x4ed14a8d1d7c83ef838e0c8c4bed16e0d0c22c3e95e30ba3d5c67be2880a63ab"
             }
           ]
         }
@@ -99,7 +102,8 @@
                 "Verificar el spender en el contrato correcto",
                 "Otorgar allowance ilimitado siempre para evitar fallos",
                 "Revocar approvals después de usar la dApp"
-              ]
+              ],
+              "answersHash": "0x623d78e3eb0e2b4fb478b3d3bc04aac900f705fceffb83de94fa5d68993afa84"
             }
           ]
         },
@@ -117,7 +121,8 @@
                 "Complejidad de la función llamada",
                 "Precio del bloque/gwei",
                 "Cantidad de tokens en tu billetera"
-              ]
+              ],
+              "answersHash": "0x44fc293ce6c235b497ac77165347fdab5580c512d3999b85b17cf67df07eda64"
             }
           ]
         }
@@ -143,7 +148,8 @@
                 "Revisar la dirección en un explorador oficial",
                 "Firmar mensajes de origen desconocido para probar",
                 "Confirmar que el contrato no es un proxy no auditado"
-              ]
+              ],
+              "answersHash": "0x9597546b9b74dbbb5a6f4c89a1526ffff7726e50ae9658a46896862643280c80"
             }
           ]
         },
@@ -161,7 +167,8 @@
                 "Usar una billetera de prueba antes de la principal",
                 "Aceptar solicitudes de firma en blanco si vienen de una marca conocida",
                 "Configurar límites de gasto bajos y revocarlos luego"
-              ]
+              ],
+              "answersHash": "0xf99ddff60a338caf86f8c872c9a4b7e652b75cdbeba307855d35c9ac492bd2ba"
             }
           ]
         }

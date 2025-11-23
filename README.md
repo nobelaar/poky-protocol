@@ -66,6 +66,8 @@ The scripts log the deployer account, target block, and initial totals so you ca
 
 Create modules that are missing and then register the track in one go by feeding a JSON file to `scripts/create-track.ts`.
 
+Subsections that collect answers must provide salted hashes instead of plaintext solutions: `answerHash` for `SIMPLE_SELECTION` and `answersHash` for `MULTIPLE_SELECTION`, both as 32-byte hex strings. Use the `computeAnswersHash([...], "<salt>")` helper inside `scripts/create-track.ts` (or replicate it elsewhere) to derive the hashes with `keccak256(encodePacked(["uint256[]", "string"], [answers, salt]))`; the script rejects payloads that expose `answer`/`answers` directly.
+
 Example payload (`track.json`) with sections/subsections. The script derives `sectionCount = sections.length` and sends only that value on-chain. You can provide `ipfsCid` directly or set `IPFS_API_URL` (+ optional `IPFS_API_TOKEN`) so `contentMdPath` uploads the Markdown blob to IPFS automatically:
 
 ```json
@@ -89,7 +91,8 @@ Example payload (`track.json`) with sections/subsections. The script derives `se
               "options": [
                 "Prueban conocimiento sin revelar secretos",
                 "Requieren que el verificador revele su clave privada"
-              ]
+              ],
+              "answersHash": "0x22fc2d2e64c0bc7311c787e74184b094478a1549fb06fc84ca57044ca9417d73"
             }
           ]
         },
