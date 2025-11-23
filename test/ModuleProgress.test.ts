@@ -113,7 +113,7 @@ describe("ModuleProgress (commit-reveal)", async () => {
     );
   });
 
-  it("prevents reusing hash+salt combinations within a section", async () => {
+  it("allows different users to reuse a section commitment", async () => {
     const section0 = commitmentFor("4", "salt1");
     await moduleProgress.write.setSectionCommitment([moduleId, section0.commitment], {
       account: author.account,
@@ -125,13 +125,28 @@ describe("ModuleProgress (commit-reveal)", async () => {
     );
     await publicClient.waitForTransactionReceipt({ hash: tx });
 
-    await viem.assertions.revertWithCustomError(
-      moduleProgress.write.claimSectionCompletion(
-        [moduleId, 0n, section0.providedHash, section0.salt],
-        { account: secondLearner.account },
-      ),
-      moduleProgress,
-      "CommitmentAlreadyUsed",
+    const tx2 = await moduleProgress.write.claimSectionCompletion(
+      [moduleId, 0n, section0.providedHash, section0.salt],
+      { account: secondLearner.account },
+    );
+    await publicClient.waitForTransactionReceipt({ hash: tx2 });
+
+    assert.equal(
+      await moduleProgress.read.hasCompletedSection([
+        learner.account.address,
+        moduleId,
+        0n,
+      ]),
+      true,
+    );
+
+    assert.equal(
+      await moduleProgress.read.hasCompletedSection([
+        secondLearner.account.address,
+        moduleId,
+        0n,
+      ]),
+      true,
     );
   });
 

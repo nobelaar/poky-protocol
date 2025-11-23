@@ -11,7 +11,12 @@ contract ModuleProgress {
     error NotModuleAuthor(address caller, uint256 moduleId);
     error SectionAlreadyCompleted(address user, uint256 moduleId, uint256 sectionId);
     error CommitmentMismatch(bytes32 expected, bytes32 provided);
-    error CommitmentAlreadyUsed(uint256 moduleId, uint256 sectionId, bytes32 commitment);
+    error CommitmentAlreadyUsed(
+        address user,
+        uint256 moduleId,
+        uint256 sectionId,
+        bytes32 commitment
+    );
     error SectionLimitReached(uint256 moduleId);
 
     event ModuleCompleted(address indexed user, uint256 indexed moduleId);
@@ -27,11 +32,11 @@ contract ModuleProgress {
         public sectionCommitments;
     mapping(address user => mapping(uint256 moduleId => mapping(uint256 sectionId => bool)))
         private completedSections;
+    mapping(address user => mapping(uint256 moduleId => mapping(uint256 sectionId => mapping(bytes32 commitment => bool used))))
+        private usedCommitments;
     mapping(address user => mapping(uint256 moduleId => uint256 count))
         public completedSectionCount;
     mapping(address user => mapping(uint256 moduleId => bool)) private completedModules;
-    mapping(uint256 moduleId => mapping(uint256 sectionId => mapping(bytes32 commitment => bool used)))
-        private usedCommitments;
 
     constructor(address moduleRegistryAddress) {
         require(moduleRegistryAddress != address(0), "invalid registry");
@@ -84,11 +89,16 @@ contract ModuleProgress {
             revert CommitmentMismatch(expectedCommitment, computedCommitment);
         }
 
-        if (usedCommitments[moduleId][sectionId][computedCommitment]) {
-            revert CommitmentAlreadyUsed(moduleId, sectionId, computedCommitment);
+        if (usedCommitments[msg.sender][moduleId][sectionId][computedCommitment]) {
+            revert CommitmentAlreadyUsed(
+                msg.sender,
+                moduleId,
+                sectionId,
+                computedCommitment
+            );
         }
 
-        usedCommitments[moduleId][sectionId][computedCommitment] = true;
+        usedCommitments[msg.sender][moduleId][sectionId][computedCommitment] = true;
 
         completedSections[msg.sender][moduleId][sectionId] = true;
         completedSectionCount[msg.sender][moduleId] += 1;
