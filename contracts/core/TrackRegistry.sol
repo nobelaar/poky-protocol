@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.30;
 
+import {IModuleRegistry} from "../interfaces/IModuleRegistry.sol";
 import {ITrackRegistry} from "../interfaces/ITrackRegistry.sol";
 import {Types} from "../interfaces/Types.sol";
 
@@ -10,7 +11,12 @@ contract TrackRegistry is ITrackRegistry {
     error TrackNotFound(uint256 trackId);
     error EmptyModuleIds();
 
+    IModuleRegistry public immutable moduleRegistry;
     Types.Track[] private tracks;
+
+    constructor(IModuleRegistry moduleRegistry_) {
+        moduleRegistry = moduleRegistry_;
+    }
 
     /// @inheritdoc ITrackRegistry
     function createTrack(string calldata title, uint256[] calldata moduleIds)
@@ -20,6 +26,13 @@ contract TrackRegistry is ITrackRegistry {
     {
         if (moduleIds.length == 0) {
             revert EmptyModuleIds();
+        }
+
+        for (uint256 i = 0; i < moduleIds.length; ) {
+            moduleRegistry.getModule(moduleIds[i]);
+            unchecked {
+                ++i;
+            }
         }
 
         trackId = tracks.length;

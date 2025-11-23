@@ -15,15 +15,42 @@ describe("TrackRegistry", async () => {
     createdAt: bigint;
   };
 
-  const deployTrackRegistry = () => viem.deployContract("TrackRegistry");
+  const deployModuleRegistry = () => viem.deployContract("ModuleRegistry");
+  const deployTrackRegistry = (moduleRegistry: `0x${string}`) =>
+    viem.deployContract("TrackRegistry", [moduleRegistry]);
+  type ModuleRegistryContract = Awaited<
+    ReturnType<typeof deployModuleRegistry>
+  >;
   type TrackRegistryContract = Awaited<
     ReturnType<typeof deployTrackRegistry>
   >;
 
+  let moduleRegistry: ModuleRegistryContract;
   let trackRegistry: TrackRegistryContract;
+  let availableModuleIds: bigint[];
+
+  const createModule = async (title: string) => {
+    const txHash = await moduleRegistry.write.createModule(
+      [title, "Description", "image.png", "bafy", 1n],
+      { account: deployer.account },
+    );
+    await publicClient.waitForTransactionReceipt({ hash: txHash });
+
+    const total = (await moduleRegistry.read.totalModules()) as bigint;
+    return total - 1n;
+  };
 
   beforeEach(async () => {
-    trackRegistry = await deployTrackRegistry();
+    moduleRegistry = await deployModuleRegistry();
+    availableModuleIds = [];
+
+    const titles = ["Intro", "Basics", "Advanced", "Security", "Tooling"];
+    for (const title of titles) {
+      const moduleId = await createModule(title);
+      availableModuleIds.push(moduleId);
+    }
+
+    trackRegistry = await deployTrackRegistry(moduleRegistry.address);
   });
 
   const createTrack = async (options?: {
@@ -33,7 +60,7 @@ describe("TrackRegistry", async () => {
   }) => {
     const args = {
       title: options?.title ?? "Track 1",
-      moduleIds: options?.moduleIds ?? [1n, 2n],
+      moduleIds: options?.moduleIds ?? [availableModuleIds[0], availableModuleIds[1]],
     };
 
     const txHash = await trackRegistry.write.createTrack(
@@ -48,7 +75,7 @@ describe("TrackRegistry", async () => {
   };
 
   it("stores title, author, moduleIds and timestamps", async () => {
-    const moduleIds = [5n, 10n, 15n];
+    const moduleIds = [availableModuleIds[3], availableModuleIds[1], availableModuleIds[4]];
 
     const txHash = await trackRegistry.write.createTrack(
       ["Advanced ZK", moduleIds],
@@ -73,7 +100,7 @@ describe("TrackRegistry", async () => {
   });
 
   it("preserves the order of module ids", async () => {
-    const moduleIds = [11n, 2n, 9n];
+    const moduleIds = [availableModuleIds[2], availableModuleIds[0], availableModuleIds[4]];
     const trackId = await createTrack({
       title: "Mixed Track",
       moduleIds,
@@ -147,5 +174,29 @@ describe("TrackRegistry", async () => {
       trackRegistry,
       "TrackNotFound",
     );
+  });
+
+  it("reverts when any module id does not exist", async () => {
+    await viem.assertions.revertWithCustomError(
+      trackRegistry.write.createTrack([
+        "Invalid Track",
+        [availableModuleIds[0], 99n],
+      ]),
+      moduleRegistry,
+      "ModuleNotFound",
+    );
+  });
+
+  it("creates tracks when all module ids are valid", async () => {
+    const moduleIds = [availableModuleIds[1], availableModuleIds[2]];
+    const trackId = await createTrack({
+      title: "Valid Modules",
+      moduleIds,
+    });
+
+    const stored = (await trackRegistry.read.getTrack([trackId])) as TrackStruct;
+
+    assert.equal(stored.title, "Valid Modules");
+    assert.deepEqual(stored.moduleIds, moduleIds);
   });
 });

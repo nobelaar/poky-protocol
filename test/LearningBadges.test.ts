@@ -10,7 +10,8 @@ describe("LearningBadges", async () => {
   const [author, learner] = await viem.getWalletClients();
 
   const deployModuleRegistry = () => viem.deployContract("ModuleRegistry");
-  const deployTrackRegistry = () => viem.deployContract("TrackRegistry");
+  const deployTrackRegistry = (moduleRegistry: `0x${string}`) =>
+    viem.deployContract("TrackRegistry", [moduleRegistry]);
   const deployModuleProgress = (registryAddress: `0x${string}`) =>
     viem.deployContract("ModuleProgress", [registryAddress]);
   const deployLearningBadges = (
@@ -21,7 +22,9 @@ describe("LearningBadges", async () => {
   type ModuleRegistryContract = Awaited<
     ReturnType<typeof deployModuleRegistry>
   >;
-  type TrackRegistryContract = Awaited<ReturnType<typeof deployTrackRegistry>>;
+  type TrackRegistryContract = Awaited<
+    ReturnType<typeof deployTrackRegistry>
+  >;
   type ModuleProgressContract = Awaited<
     ReturnType<typeof deployModuleProgress>
   >;
@@ -83,7 +86,7 @@ describe("LearningBadges", async () => {
       { account: author.account },
     );
 
-    trackRegistry = await deployTrackRegistry();
+    trackRegistry = await deployTrackRegistry(moduleRegistry.address);
     await trackRegistry.write.createTrack(
       ["ZK Fundamentals", [0n, 1n]],
       { account: author.account },
