@@ -1,8 +1,8 @@
-import SectionInterface from "./section_interface.js";
+import { Section } from "./section.js";
 
 export default interface ModuleInterface {
-	title: string;
-    description: string;
-    image?: string;
-    sections: SectionInterface[];
+  title: string;
+  description: string;
+  image?: string;
+  sections: Section[];
 }
