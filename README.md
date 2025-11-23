@@ -129,6 +129,18 @@ npx hardhat run scripts/create-track.ts --network <networkName> \
   --trackRegistry <trackRegistryAddress>
 ```
 
+### Answer commitments in example tracks
+
+Example tracks now commit to quiz solutions instead of shipping plaintext answers. `examples/stablecoins-track.json` stores a
+root-level `answerSalt` string and replaces `answer`/`answers` with `answerHash`/`answersHash` fields that were precomputed
+off-chain. To reproduce a commitment, normalize the learner response with **NFKC**, trim it, collapse internal whitespace to a
+single space, and lowercase the result. For single-selection quizzes, hash the normalized option text with
+`keccak256(abi.encodePacked(normalizedAnswer, answerSalt))`; for multiple-selection quizzes, sort the zero-based option indices,
+join them with commas (e.g. `0,1,3,4`), and hash that string with the same salt via `keccak256(abi.encodePacked(indexes, answerSalt))`.
+
+Because only hashes are present, any consumer of the track JSON should treat `answerSalt` as the sole preimage hint and avoid
+expecting clear-text solutions.
+
 ## Networks & Configuration
 
 - Hardhat config (`hardhat.config.ts`) enables the Hardhat 3 + viem toolbox and ships with profiles for the default local chain, an OP-style simulation (`hardhatOp`), and Sepolia.
