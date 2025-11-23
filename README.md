@@ -7,16 +7,16 @@ This repo hosts the first smart contracts for Poky, a minimal knowledge protocol
 
 - `contracts/core/ModuleRegistry.sol` stores immutable metadata for learning modules (titles, descriptions, images, IPFS CIDs, authors, timestamps). IDs are the array index and events surface the author/IPFS pair.
 - `contracts/core/TrackRegistry.sol` keeps higher-level learning tracks composed of ordered module IDs. Tracks require at least one module and also store the author + timestamp.
-- `contracts/core/ModuleProgress.sol` stores section commitments for each module and validates learners' salted preimage hashes before emitting `ModuleCompleted`.
+- `contracts/core/ModuleProgress.sol` stores section commitments for each module and validates learner proofs against those commitments before emitting `ModuleCompleted`.
 - `contracts/core/LearningBadges.sol` mints soulbound badges for module or track completions once `ModuleProgress` shows every prerequisite is done (users mint their own badges; transfers are blocked; burning is opt-in).
 - Structs live in `contracts/interfaces/Types.sol`; external-facing interfaces sit in `contracts/interfaces/IModuleRegistry.sol` and `contracts/interfaces/ITrackRegistry.sol`.
 
 ## Completion + Badge Flow
 
 1. **Module + track creation:** authors register modules (and optional tracks).
-2. **Publish commitments:** the module author records a commitment hash (e.g. `keccak256(answerHash || salt)`) per section via `ModuleProgress.setSectionCommitment`. Each call registers the next section until reaching the module's `sectionCount`.
-3. **Learner proves completion:** off-chain tooling calculates the provided hash (e.g. `keccak256(answer)`), pairs it with the salt, and calls `claimModuleCompletion(moduleId, sectionId, providedHash, salt)`.
-4. **On-chain verification:** `ModuleProgress` recomputes `keccak256(abi.encodePacked(providedHash, salt))`, ensures it matches the stored commitment, and marks the section complete (tracking per-section hash+salt usage to prevent replays) before emitting `ModuleCompleted` once all sections are finished.
+2. **Publish commitments:** the module author records a commitment hash per section via `ModuleProgress.setSectionCommitment`. Each call registers the next section until reaching the module's `sectionCount`.
+3. **Learner proves completion:** off-chain tooling produces a proof tied to the stored commitment and calls `claimModuleCompletion(moduleId, sectionId, proof)`.
+4. **On-chain verification:** `ModuleProgress` builds the public inputs array from the stored commitment, calls the verifier, and records the proof hash to prevent replays before emitting `ModuleCompleted` once all sections are finished.
 5. **Badge mint:** learners call `mintModuleBadge(msg.sender, moduleId)` or `mintTrackBadge(trackId)` from `LearningBadges`. The contract checks `ModuleProgress` state, prevents duplicates, and allows optional burns.
 
 ### Badge mint demo
@@ -39,8 +39,8 @@ TypeScript tests in `test/ModuleRegistry.test.ts` and `test/TrackRegistry.test.t
 - Pagination helpers (`getModules`, `getTracks`) including overflows.
 - Total counters.
 - Custom-error reverts for invalid IDs and empty module arrays.
-- `test/ModuleProgress.test.ts` checks the commitment-reveal completion flow across multiple sections, commitment validation, reuse prevention, and author-only commitment publishing.
-- `test/LearningBadges.test.ts` covers module and track badge minting, duplicate prevention, and burns on top of the commitment-reveal completions.
+- `test/ModuleProgress.test.ts` checks the commitment + proof completion flow across multiple sections, verifier failures, reuse prevention, and author-only commitment publishing.
+- `test/LearningBadges.test.ts` covers module and track badge minting, duplicate prevention, and burns on top of the proof-gated completions.
 
 Run them with:
 

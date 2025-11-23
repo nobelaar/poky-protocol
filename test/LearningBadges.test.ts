@@ -12,8 +12,11 @@ describe("LearningBadges", async () => {
   const deployModuleRegistry = () => viem.deployContract("ModuleRegistry");
   const deployTrackRegistry = (moduleRegistry: `0x${string}`) =>
     viem.deployContract("TrackRegistry", [moduleRegistry]);
-  const deployModuleProgress = (registryAddress: `0x${string}`) =>
-    viem.deployContract("ModuleProgress", [registryAddress]);
+  const deployVerifier = () => viem.deployContract("MockVerifier");
+  const deployModuleProgress = (
+    registryAddress: `0x${string}`,
+    verifier: `0x${string}`,
+  ) => viem.deployContract("ModuleProgress", [registryAddress, verifier]);
   const deployLearningBadges = (
     progress: `0x${string}`,
     trackRegistry: `0x${string}`,
@@ -31,33 +34,32 @@ describe("LearningBadges", async () => {
   type LearningBadgesContract = Awaited<
     ReturnType<typeof deployLearningBadges>
   >;
+  type VerifierContract = Awaited<ReturnType<typeof deployVerifier>>;
 
   let moduleRegistry: ModuleRegistryContract;
   let trackRegistry: TrackRegistryContract;
+  let verifier: VerifierContract;
   let moduleProgress: ModuleProgressContract;
   let learningBadges: LearningBadgesContract;
 
-  const saltFor = (input: string) =>
-    keccak256(encodePacked(["string"], [input]));
-  const providedHashFor = (answer: string) =>
-    keccak256(encodePacked(["string"], [answer]));
-  const makeCommitment = (answer: string, saltSeed: string) => {
-    const providedHash = providedHashFor(answer);
-    const salt = saltFor(saltSeed);
-    const commitment = keccak256(
-      encodePacked(["bytes32", "bytes32"], [providedHash, salt]),
-    );
-    return { commitment, providedHash, salt };
+  const makeCommitment = (label: string) =>
+    keccak256(encodePacked(["string"], [label]));
+  const proofFor = (label: string) =>
+    encodePacked(["string"], [`proof-${label}`]);
+  const registerProof = async (
+    proof: `0x${string}`,
+    commitment: `0x${string}`,
+  ) => {
+    await verifier.write.setValidProof([proof, [commitment]]);
   };
 
   const claimCompletion = async (
     moduleId: bigint,
     sectionId: bigint,
-    providedHash: `0x${string}`,
-    salt: `0x${string}`,
+    proof: `0x${string}`,
   ) => {
     const txHash = await moduleProgress.write.claimSectionCompletion(
-      [moduleId, sectionId, providedHash, salt],
+      [moduleId, sectionId, proof],
       { account: learner.account },
     );
     await publicClient.waitForTransactionReceipt({ hash: txHash });
@@ -92,7 +94,11 @@ describe("LearningBadges", async () => {
       { account: author.account },
     );
 
-    moduleProgress = await deployModuleProgress(moduleRegistry.address);
+    verifier = await deployVerifier();
+    moduleProgress = await deployModuleProgress(
+      moduleRegistry.address,
+      verifier.address,
+    );
     learningBadges = await deployLearningBadges(
       moduleProgress.address,
       trackRegistry.address,
@@ -100,16 +106,20 @@ describe("LearningBadges", async () => {
   });
 
   it("mints module badges after completion proofs", async () => {
-    const section0 = makeCommitment("answer1", "salt1");
-    const section1 = makeCommitment("answer1b", "salt1b");
-    await moduleProgress.write.setSectionCommitment([0n, section0.commitment], {
+    const section0 = makeCommitment("answer1");
+    const section1 = makeCommitment("answer1b");
+    await moduleProgress.write.setSectionCommitment([0n, section0], {
       account: author.account,
     });
-    await moduleProgress.write.setSectionCommitment([0n, section1.commitment], {
+    await moduleProgress.write.setSectionCommitment([0n, section1], {
       account: author.account,
     });
-    await claimCompletion(0n, 0n, section0.providedHash, section0.salt);
-    await claimCompletion(0n, 1n, section1.providedHash, section1.salt);
+    const proof0 = proofFor("answer1");
+    const proof1 = proofFor("answer1b");
+    await registerProof(proof0, section0);
+    await registerProof(proof1, section1);
+    await claimCompletion(0n, 0n, proof0);
+    await claimCompletion(0n, 1n, proof1);
 
     const txHash = await learningBadges.write.mintModuleBadge(
       [learner.account.address, 0n],
@@ -135,16 +145,22 @@ describe("LearningBadges", async () => {
   });
 
   it("mints track badges only after all modules are completed", async () => {
-    const section00 = makeCommitment("answer1", "salt1");
-    const section01 = makeCommitment("answer1b", "salt1b");
-    const section10 = makeCommitment("answer2", "salt2");
-    await moduleProgress.write.setSectionCommitment([0n, section00.commitment], {
+    const section00 = makeCommitment("answer1");
+    const section01 = makeCommitment("answer1b");
+    const section10 = makeCommitment("answer2");
+    await moduleProgress.write.setSectionCommitment([0n, section00], {
       account: author.account,
     });
-    await moduleProgress.write.setSectionCommitment([0n, section01.commitment], {
+    await moduleProgress.write.setSectionCommitment([0n, section01], {
       account: author.account,
     });
-    await claimCompletion(0n, 0n, section00.providedHash, section00.salt);
+    const proof00 = proofFor("answer1");
+    const proof01 = proofFor("answer1b");
+    const proof10 = proofFor("answer2");
+    await registerProof(proof00, section00);
+    await registerProof(proof01, section01);
+    await registerProof(proof10, section10);
+    await claimCompletion(0n, 0n, proof00);
     await viem.assertions.revertWithCustomError(
       learningBadges.write.mintTrackBadge([0n], {
         account: learner.account,
@@ -153,11 +169,11 @@ describe("LearningBadges", async () => {
       "TrackModulesIncomplete",
     );
 
-    await moduleProgress.write.setSectionCommitment([1n, section10.commitment], {
+    await moduleProgress.write.setSectionCommitment([1n, section10], {
       account: author.account,
     });
-    await claimCompletion(0n, 1n, section01.providedHash, section01.salt);
-    await claimCompletion(1n, 0n, section10.providedHash, section10.salt);
+    await claimCompletion(0n, 1n, proof01);
+    await claimCompletion(1n, 0n, proof10);
     const txHash = await learningBadges.write.mintTrackBadge([0n], {
       account: learner.account,
     });
@@ -175,16 +191,20 @@ describe("LearningBadges", async () => {
   });
 
   it("prevents duplicate module badge mints", async () => {
-    const section0 = makeCommitment("answer1", "salt1");
-    const section1 = makeCommitment("answer1b", "salt1b");
-    await moduleProgress.write.setSectionCommitment([0n, section0.commitment], {
+    const section0 = makeCommitment("answer1");
+    const section1 = makeCommitment("answer1b");
+    await moduleProgress.write.setSectionCommitment([0n, section0], {
       account: author.account,
     });
-    await moduleProgress.write.setSectionCommitment([0n, section1.commitment], {
+    await moduleProgress.write.setSectionCommitment([0n, section1], {
       account: author.account,
     });
-    await claimCompletion(0n, 0n, section0.providedHash, section0.salt);
-    await claimCompletion(0n, 1n, section1.providedHash, section1.salt);
+    const proof0 = proofFor("answer1");
+    const proof1 = proofFor("answer1b");
+    await registerProof(proof0, section0);
+    await registerProof(proof1, section1);
+    await claimCompletion(0n, 0n, proof0);
+    await claimCompletion(0n, 1n, proof1);
     const mintTx = await learningBadges.write.mintModuleBadge(
       [learner.account.address, 0n],
       { account: learner.account },
@@ -201,16 +221,20 @@ describe("LearningBadges", async () => {
   });
 
   it("allows holders to burn their badge", async () => {
-    const section0 = makeCommitment("answer1", "salt1");
-    const section1 = makeCommitment("answer1b", "salt1b");
-    await moduleProgress.write.setSectionCommitment([0n, section0.commitment], {
+    const section0 = makeCommitment("answer1");
+    const section1 = makeCommitment("answer1b");
+    await moduleProgress.write.setSectionCommitment([0n, section0], {
       account: author.account,
     });
-    await moduleProgress.write.setSectionCommitment([0n, section1.commitment], {
+    await moduleProgress.write.setSectionCommitment([0n, section1], {
       account: author.account,
     });
-    await claimCompletion(0n, 0n, section0.providedHash, section0.salt);
-    await claimCompletion(0n, 1n, section1.providedHash, section1.salt);
+    const proof0 = proofFor("answer1");
+    const proof1 = proofFor("answer1b");
+    await registerProof(proof0, section0);
+    await registerProof(proof1, section1);
+    await claimCompletion(0n, 0n, proof0);
+    await claimCompletion(0n, 1n, proof1);
     const mintTx = await learningBadges.write.mintModuleBadge(
       [learner.account.address, 0n],
       { account: learner.account },

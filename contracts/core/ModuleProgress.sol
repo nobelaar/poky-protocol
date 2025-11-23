@@ -1,22 +1,23 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.30;
 
+import {IVerifier} from "../interfaces/IVerifier.sol";
 import {IModuleRegistry} from "../interfaces/IModuleRegistry.sol";
 import {Types} from "../interfaces/Types.sol";
 
-/// @title ModuleProgress (commit-reveal)
-/// @notice Permissionless tracker that validates section commitments via hash preimages
+/// @title ModuleProgress
+/// @notice Permissionless tracker that validates section commitments via external proofs
 contract ModuleProgress {
     error CommitmentNotSet(uint256 moduleId, uint256 sectionId);
     error NotModuleAuthor(address caller, uint256 moduleId);
     error SectionAlreadyCompleted(address user, uint256 moduleId, uint256 sectionId);
-    error CommitmentMismatch(bytes32 expected, bytes32 provided);
     error CommitmentAlreadyUsed(
         address user,
         uint256 moduleId,
         uint256 sectionId,
-        bytes32 commitment
+        bytes32 proofHash
     );
+    error InvalidProof();
     error SectionLimitReached(uint256 moduleId);
 
     event ModuleCompleted(address indexed user, uint256 indexed moduleId);
@@ -27,20 +28,23 @@ contract ModuleProgress {
     );
 
     IModuleRegistry public immutable moduleRegistry;
+    IVerifier public immutable verifier;
     mapping(uint256 moduleId => uint256 count) public moduleSectionCounts;
     mapping(uint256 moduleId => mapping(uint256 sectionId => bytes32 commitment))
         public sectionCommitments;
     mapping(address user => mapping(uint256 moduleId => mapping(uint256 sectionId => bool)))
         private completedSections;
-    mapping(address user => mapping(uint256 moduleId => mapping(uint256 sectionId => mapping(bytes32 commitment => bool used))))
-        private usedCommitments;
+    mapping(address user => mapping(uint256 moduleId => mapping(uint256 sectionId => mapping(bytes32 proofHash => bool used))))
+        private usedProofs;
     mapping(address user => mapping(uint256 moduleId => uint256 count))
         public completedSectionCount;
     mapping(address user => mapping(uint256 moduleId => bool)) private completedModules;
 
-    constructor(address moduleRegistryAddress) {
+    constructor(address moduleRegistryAddress, address verifierAddress) {
         require(moduleRegistryAddress != address(0), "invalid registry");
+        require(verifierAddress != address(0), "invalid verifier");
         moduleRegistry = IModuleRegistry(moduleRegistryAddress);
+        verifier = IVerifier(verifierAddress);
     }
 
     /// @notice Authors publish commitments for each section of their module
@@ -62,12 +66,11 @@ contract ModuleProgress {
         emit SectionCommitmentSet(moduleId, sectionId, commitment);
     }
 
-    /// @notice Records a section completion for msg.sender by revealing a salted preimage hash
+    /// @notice Records a section completion for msg.sender after verifying proof against commitment
     function claimSectionCompletion(
         uint256 moduleId,
         uint256 sectionId,
-        bytes32 providedHash,
-        bytes32 salt
+        bytes calldata proof
     ) external {
         Types.Module memory moduleData = moduleRegistry.getModule(moduleId);
         uint256 expectedSections = moduleData.sectionCount;
@@ -84,21 +87,23 @@ contract ModuleProgress {
             revert CommitmentNotSet(moduleId, sectionId);
         }
 
-        bytes32 computedCommitment = keccak256(abi.encodePacked(providedHash, salt));
-        if (computedCommitment != expectedCommitment) {
-            revert CommitmentMismatch(expectedCommitment, computedCommitment);
+        bytes32[] memory publicInputs = new bytes32[](1);
+        publicInputs[0] = expectedCommitment;
+        if (!verifier.verify(proof, publicInputs)) {
+            revert InvalidProof();
         }
 
-        if (usedCommitments[msg.sender][moduleId][sectionId][computedCommitment]) {
+        bytes32 proofHash = keccak256(proof);
+        if (usedProofs[msg.sender][moduleId][sectionId][proofHash]) {
             revert CommitmentAlreadyUsed(
                 msg.sender,
                 moduleId,
                 sectionId,
-                computedCommitment
+                proofHash
             );
         }
 
-        usedCommitments[msg.sender][moduleId][sectionId][computedCommitment] = true;
+        usedProofs[msg.sender][moduleId][sectionId][proofHash] = true;
 
         completedSections[msg.sender][moduleId][sectionId] = true;
         completedSectionCount[msg.sender][moduleId] += 1;
